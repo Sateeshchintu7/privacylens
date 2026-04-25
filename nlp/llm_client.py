@@ -97,7 +97,7 @@ def call_gemini(
 
     t0 = time.monotonic()
     last_err = None
-    for attempt in range(2):
+    for attempt in range(3):
         try:
             resp = client.models.generate_content(
                 model=GEMINI_MODEL,
@@ -120,11 +120,22 @@ def call_gemini(
         except Exception as exc:
             last_err = exc
             logger.warning("Gemini attempt %d failed: %s", attempt + 1, exc)
-            if attempt == 0:
-                time.sleep(2)
+            if attempt < 2:
+                # Extract retry delay from 429 errors when available
+                err_str = str(exc)
+                wait = [5, 15][attempt]  # default backoff
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    import re as _re
+                    m = _re.search(r"retryDelay.*?(\d+)s", err_str)
+                    if m:
+                        wait = min(int(m.group(1)) + 2, 60)  # respect API hint + 2s buffer
+                    else:
+                        wait = [25, 35][attempt]  # longer waits for rate limits
+                logger.info("Retrying in %ds...", wait)
+                time.sleep(wait)
 
     raise RuntimeError(
-        f"Gemini API failed after 2 attempts: {last_err}. "
+        f"Gemini API failed after 3 attempts: {last_err}. "
         "Check your API key and internet connection."
     )
 

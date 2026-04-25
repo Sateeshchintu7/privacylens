@@ -75,7 +75,7 @@ def _translate_text(text: str, target_lang: str) -> str:
 
     def _call_gemini(prompt: str) -> str:
         from nlp.llm_client import call_gemini
-        result, _ = call_gemini(prompt, function_name="translate_audio", use_cache=False)
+        result, _ = call_gemini(prompt, function_name="translate_audio", use_cache=True)
         return (result or "").strip()
 
     def _count_script_chars(t: str, lang: str) -> int:

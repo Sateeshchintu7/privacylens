@@ -134,12 +134,47 @@ export default function AnalysePage() {
 
             {/* Mode tabs */}
             <div style={{ position: 'sticky', top: 64, zIndex: 30, background: 'rgba(10,14,26,0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid #1E2D45', marginBottom: 24 }}>
-              <div style={{ display: 'flex', overflowX: 'auto' }}>
+              <div style={{ display: 'flex', overflowX: 'auto', alignItems: 'center' }}>
                 {TABS.map(t => (
                   <button key={t.id} style={tabStyle(t.id)} onClick={() => setActiveTab(t.id)}>
                     {t.icon} {t.label}
                   </button>
                 ))}
+                <div style={{ marginLeft: 'auto', paddingRight: 8, flexShrink: 0 }}>
+                  <select
+                    value={selectedLanguage}
+                    onChange={e => setSelectedLanguage(e.target.value)}
+                    style={{
+                      padding: '6px 10px', background: '#1A2236', border: '1px solid #1E2D45',
+                      borderRadius: 8, color: '#F1F5F9', fontSize: 12, cursor: 'pointer',
+                    }}
+                  >
+                    <option value="en">🌐 English</option>
+                    <option value="hi">🇮🇳 Hindi</option>
+                    <option value="te">🇮🇳 Telugu</option>
+                    <option value="ta">🇮🇳 Tamil</option>
+                    <option value="kn">🇮🇳 Kannada</option>
+                    <option value="ml">🇮🇳 Malayalam</option>
+                    <option value="bn">🇧🇩 Bengali</option>
+                    <option value="mr">🇮🇳 Marathi</option>
+                    <option value="gu">🇮🇳 Gujarati</option>
+                    <option value="pa">🇮🇳 Punjabi</option>
+                    <option value="ur">🇵🇰 Urdu</option>
+                    <option value="es">🇪🇸 Spanish</option>
+                    <option value="fr">🇫🇷 French</option>
+                    <option value="de">🇩🇪 German</option>
+                    <option value="it">🇮🇹 Italian</option>
+                    <option value="pt">🇵🇹 Portuguese</option>
+                    <option value="nl">🇳🇱 Dutch</option>
+                    <option value="ru">🇷🇺 Russian</option>
+                    <option value="ar">🇸🇦 Arabic</option>
+                    <option value="zh-cn">🇨🇳 Chinese</option>
+                    <option value="ja">🇯🇵 Japanese</option>
+                    <option value="ko">🇰🇷 Korean</option>
+                    <option value="tr">🇹🇷 Turkish</option>
+                    <option value="vi">🇻🇳 Vietnamese</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -177,7 +212,7 @@ export default function AnalysePage() {
                   />
                 )}
                 {activeTab === 'report' && (
-                  <ReportMode data={state.data} language="en" />
+                  <ReportMode data={state.data} language={selectedLanguage} />
                 )}
               </motion.div>
             </AnimatePresence>

@@ -20,14 +20,18 @@ export default function ReadMode({ plainClauses, clauseRisks, darkPatterns, lang
   const riskMap = Object.fromEntries(clauseRisks.map(r => [r.category, r]))
   const { translateBatch, translating, isEnglish } = useTranslation(language)
   const [translatedSummaries, setTranslatedSummaries] = useState<string[]>([])
+  const [translatedGists, setTranslatedGists] = useState<string[]>([])
 
   useEffect(() => {
     if (isEnglish || plainClauses.length === 0) {
       setTranslatedSummaries([])
+      setTranslatedGists([])
       return
     }
     const summaries = plainClauses.map(c => c.plain_summary || c.what_it_means || '')
+    const gists = plainClauses.map(c => c.what_it_means || '')
     translateBatch(summaries).then(setTranslatedSummaries)
+    translateBatch(gists).then(setTranslatedGists)
   }, [plainClauses, language]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep original index mapping so translated summaries align with clauses
@@ -90,7 +94,7 @@ export default function ReadMode({ plainClauses, clauseRisks, darkPatterns, lang
               {/* DP-3 Level 1 gist — one-line summary always visible */}
               {clause.what_it_means && (
                 <div style={{ fontSize: 13, color: '#94A3B8', marginTop: 5, paddingLeft: 34, lineHeight: 1.5 }}>
-                  {clause.what_it_means}
+                  {translatedGists[origIdx] || clause.what_it_means}
                 </div>
               )}
               {/* DP-2: data type SVG icons detected from clause text */}
