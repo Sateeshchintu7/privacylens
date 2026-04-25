@@ -2,21 +2,21 @@ import { useState, useCallback, useRef } from 'react'
 import { startAnalysis, getAnalysisStatus, checkHealth, detectContradictions } from '../api/client'
 import type { AnalysisState, AnalyseRequest, AnalyseResponse, ContradictionReport } from '../types'
 
-// Progress steps spread over ~170 seconds
+// Progress steps — compressed to ~60s (fallback if server doesn't report progress)
 const STEPS: Array<{ pct: number; label: string; delay: number }> = [
   { pct: 10, label: 'Connecting to server...',          delay: 500     },
-  { pct: 20, label: 'Fetching document...',             delay: 3_000   },
-  { pct: 33, label: 'Cleaning and processing text...',  delay: 8_000   },
-  { pct: 48, label: 'Extracting clauses with AI...',    delay: 22_000  },
-  { pct: 61, label: 'Scoring privacy risk...',          delay: 55_000  },
-  { pct: 72, label: 'Rewriting in plain English...',    delay: 85_000  },
-  { pct: 81, label: 'Checking GDPR compliance...',      delay: 115_000 },
-  { pct: 88, label: 'Detecting contradictions...',      delay: 145_000 },
-  { pct: 93, label: 'Finalising analysis...',           delay: 168_000 },
+  { pct: 18, label: 'Fetching document...',             delay: 2_000   },
+  { pct: 25, label: 'Cleaning and processing text...',  delay: 4_000   },
+  { pct: 35, label: 'Extracting clauses with AI...',    delay: 8_000   },
+  { pct: 50, label: 'Scoring privacy risk...',          delay: 18_000  },
+  { pct: 65, label: 'Rewriting in plain English...',    delay: 30_000  },
+  { pct: 78, label: 'Checking GDPR compliance...',      delay: 40_000  },
+  { pct: 88, label: 'Detecting dark patterns...',       delay: 50_000  },
+  { pct: 93, label: 'Finalising analysis...',           delay: 58_000  },
 ]
 
-const POLL_INTERVAL_MS = 3_000
-const MAX_POLLS        = 120  // 6 min at 3s interval
+const POLL_INTERVAL_MS = 2_000   // poll every 2s (was 3s)
+const MAX_POLLS        = 120     // 4 min at 2s interval
 
 export function useAnalysis() {
   const [state, setState] = useState<AnalysisState>({
@@ -103,15 +103,15 @@ export function useAnalysis() {
       } catch { /* fall through to polling */ }
     }
 
-    // ── Animate progress steps while job runs in background ─────────────────
+    // ── Animate progress steps as fallback while job runs in background ─────
     STEPS.forEach(({ pct, label, delay }) => {
       const t = setTimeout(() => {
-        setState(s => s.status === 'loading' ? { ...s, progress: pct, currentStep: label } : s)
+        setState(s => s.status === 'loading' ? { ...s, progress: Math.max(s.progress, pct), currentStep: label } : s)
       }, delay)
       stepTimers.current.push(t)
     })
 
-    // ── Poll /api/analyse/status/{jobId} every 3 seconds ────────────────────
+    // ── Poll /api/analyse/status/{jobId} every 2 seconds ────────────────────
     let polls = 0
     pollRef.current = setInterval(async () => {
       polls++
@@ -132,6 +132,15 @@ export function useAnalysis() {
       try {
         const res = await getAnalysisStatus(jobId)
         const job = res.data
+
+        // Use real server-side progress if available
+        if (job.status === 'running' && job.progress && job.current_step) {
+          setState(s => s.status === 'loading' ? {
+            ...s,
+            progress: Math.max(s.progress, job.progress),
+            currentStep: job.current_step,
+          } : s)
+        }
 
         if (job.status === 'complete' && job.result) {
           clearTimers()

@@ -15,6 +15,7 @@ Reference: Wilson et al. (2016) OPP-115 -- 12-category taxonomy
 import hashlib
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
 import uuid
 from pathlib import Path
@@ -54,6 +55,27 @@ RISK_WEIGHTS: dict[str, float] = {
 }
 
 VALID_CATEGORIES = set(GDPR_ARTICLES.keys())
+
+# Maximum clauses to process downstream — prevents runaway LLM calls
+MAX_CLAUSES = 20
+
+# Priority order for clause cap: keep these categories first
+PRIORITY_CATEGORIES = [
+    "children_data", "third_party_sharing", "data_collection",
+    "user_rights", "data_security", "consent_mechanism",
+    "cross_border_transfer", "retention_period", "breach_notification",
+    "cookies_tracking", "purpose_limitation", "contact_info",
+]
+
+
+def _prioritize_clauses(clauses: list, max_clauses: int = MAX_CLAUSES) -> list:
+    """Keep at most `max_clauses`, prioritised by category importance."""
+    if len(clauses) <= max_clauses:
+        return clauses
+    logger.info("Capping %d clauses to %d (priority order)", len(clauses), max_clauses)
+    priority_map = {cat: i for i, cat in enumerate(PRIORITY_CATEGORIES)}
+    clauses.sort(key=lambda c: (priority_map.get(c.category, 99), -c.confidence))
+    return clauses[:max_clauses]
 
 # ── Keyword lists for Layer 3 fallback ───────────────────────────────────────
 
@@ -341,6 +363,9 @@ def extract_clauses(policy_text: str, use_cache: bool = True) -> list[ClauseResu
 
     final.sort(key=lambda c: c.char_start)
 
+    # ── Cap at MAX_CLAUSES to prevent runaway downstream LLM calls ────────
+    final = _prioritize_clauses(final, max_clauses=MAX_CLAUSES)
+
     if use_cache and final:
         try:
             cache_file.write_text(
@@ -354,26 +379,38 @@ def extract_clauses(policy_text: str, use_cache: bool = True) -> list[ClauseResu
 
 
 def _gemini_extract(policy_text: str) -> list[ClauseResult]:
-    """Layer 1: Structured per-chunk Gemini extraction."""
+    """Layer 1: Structured per-chunk Gemini extraction — parallel."""
     try:
         prompt_template = load_prompt("prompts/clause_extraction.txt")
     except Exception:
         prompt_template = _DEFAULT_EXTRACTION_PROMPT
 
     chunks = _chunk_text(policy_text)
-    all_clauses: list[ClauseResult] = []
+    if not chunks:
+        return []
 
-    for i, (chunk_text, char_offset) in enumerate(chunks):
+    def _extract_chunk(i: int, chunk_text: str, char_offset: int) -> list[ClauseResult]:
         prompt = prompt_template.replace("{POLICY_CHUNK}", chunk_text)
         try:
             response, _ = call_gemini(prompt, function_name="clause_extractor")
             raw = parse_json_response(response)
             parsed = _parse_llm_response(raw, policy_text, char_offset)
-            all_clauses.extend(parsed)
-            logger.info("Chunk %d/%d: %d clauses so far", i + 1, len(chunks), len(all_clauses))
+            logger.info("Chunk %d/%d: %d clauses", i + 1, len(chunks), len(parsed))
+            return parsed
         except Exception as exc:
             logger.warning("Chunk %d/%d extraction failed: %s", i + 1, len(chunks), exc)
+            return []
 
+    all_clauses: list[ClauseResult] = []
+    with ThreadPoolExecutor(max_workers=min(len(chunks), 4)) as ex:
+        futures = {
+            ex.submit(_extract_chunk, i, ct, co): i
+            for i, (ct, co) in enumerate(chunks)
+        }
+        for fut in as_completed(futures):
+            all_clauses.extend(fut.result())
+
+    logger.info("Parallel extraction complete: %d raw clauses from %d chunks", len(all_clauses), len(chunks))
     return _deduplicate(all_clauses)
 
 

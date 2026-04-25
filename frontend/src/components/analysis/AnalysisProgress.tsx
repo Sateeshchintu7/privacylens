@@ -8,19 +8,19 @@ const STEPS = [
   'Extracting clauses with AI...',
   'Scoring privacy risk...',
   'Rewriting in plain English...',
-  'Checking GDPR compliance...',
-  'Detecting contradictions...',
+  'Checking compliance...',
+  'Detecting dark patterns...',
 ]
 
 // Map progress % to the step index that should now be active.
 // Thresholds derived from delay timings in useAnalysis STEPS array.
 function getActiveStep(progress: number): number {
-  if (progress >= 88) return 6
-  if (progress >= 81) return 5
-  if (progress >= 72) return 4
-  if (progress >= 61) return 3
-  if (progress >= 48) return 2
-  if (progress >= 20) return 1
+  if (progress >= 85) return 6
+  if (progress >= 75) return 5
+  if (progress >= 65) return 4
+  if (progress >= 50) return 3
+  if (progress >= 25) return 2
+  if (progress >= 18) return 1
   if (progress >= 5)  return 0
   return -1
 }

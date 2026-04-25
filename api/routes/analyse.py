@@ -84,7 +84,8 @@ async def start_analysis(
         return JSONResponse({"job_id": job_id, "cached": True})
 
     # Cache miss → start background job
-    _job_set(job_id, {"status": "running", "result": None, "error": None})
+    _job_set(job_id, {"status": "running", "result": None, "error": None,
+                      "progress": 5, "current_step": "Starting analysis..."})
     background_tasks.add_task(_run_job, job_id, request.model_dump(), ck)
     return JSONResponse({"job_id": job_id, "cached": False})
 
@@ -109,19 +110,31 @@ def _run_job(job_id: str, req: dict, cache_key: str) -> None:
     NOT subject to HTTP request timeout because the response was already sent.
     """
     try:
-        result = _do_analysis(req)
+        def _update_progress(pct: int, step: str) -> None:
+            job = _JOBS.get(job_id)
+            if job:
+                job["progress"] = pct
+                job["current_step"] = step
+
+        result = _do_analysis(req, _update_progress)
         # Only cache if we got meaningful clause extraction results
         if len(result.get("clauses", [])) > 0:
             _cache_set(cache_key, result)
-        _job_set(job_id, {"status": "complete", "result": result, "error": None})
+        _job_set(job_id, {"status": "complete", "result": result, "error": None,
+                          "progress": 100, "current_step": "Analysis complete!"})
     except Exception as exc:
         import traceback
         print(f"[job {job_id}] FAILED:\n{traceback.format_exc()}")
-        _job_set(job_id, {"status": "error", "result": None, "error": str(exc)})
+        _job_set(job_id, {"status": "error", "result": None, "error": str(exc),
+                          "progress": 0, "current_step": ""})
 
 
-def _do_analysis(req: dict) -> dict:
+def _do_analysis(req: dict, progress_cb=None) -> dict:
     """Full NLP pipeline. Runs in a thread pool worker."""
+    def _progress(pct: int, step: str) -> None:
+        if progress_cb:
+            progress_cb(pct, step)
+
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
@@ -195,15 +208,19 @@ def _do_analysis(req: dict) -> dict:
 
     # ── Step 2–7: NLP pipeline ────────────────────────────────────────────────
     logger.info("Ingested %d raw chars from input_type=%s", len(raw_text), input_type)
+    _progress(15, "Cleaning text...")
     cleaned       = clean_text(raw_text)
     policy_text   = cleaned.text
     logger.info("Cleaned text: %d chars (was %d raw)", len(policy_text), len(raw_text))
 
+    _progress(20, "Extracting clauses with AI...")
     clauses       = extract_clauses(policy_text)
     clause_count  = len(clauses)
     logger.info("extract_clauses: %d clauses from %d chars of text", clause_count, len(policy_text))
     if clause_count == 0:
         logger.error("CRITICAL: 0 clauses extracted. Text sample: %.200s", policy_text)
+
+    _progress(50, f"Found {clause_count} clauses — scoring risk...")
 
     # Run independent pipeline stages in parallel — major speedup vs sequential
     with ThreadPoolExecutor(max_workers=5) as ex:
@@ -213,9 +230,12 @@ def _do_analysis(req: dict) -> dict:
         f_compliance = ex.submit(map_compliance, clauses, True, policy_text)
         f_dark       = ex.submit(detect_dark_patterns, clauses)
         risk_report   = f_risk.result()
+        _progress(65, "Rewriting in plain English...")
         plain_clauses = f_plain.result()
+        _progress(75, "Checking compliance...")
         readability   = f_readability.result()
         compliance    = f_compliance.result()
+        _progress(85, "Detecting dark patterns...")
         dark_patterns = f_dark.result()
 
     # Contradictions served lazily via /api/contradictions
