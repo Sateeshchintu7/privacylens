@@ -1,6 +1,8 @@
 {
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/api/:path*", "destination": "http://16.170.254.195/api/:path*" },
+    { "source": "/health", "destination": "http://16.170.254.195/health" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

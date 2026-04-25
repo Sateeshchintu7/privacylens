@@ -6,7 +6,7 @@ import type {
 } from '../types'
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://16.170.254.195',
+  baseURL: import.meta.env.VITE_API_URL || '',
   timeout: 180_000, // 3 min — LLM calls can be slow
 })
 
