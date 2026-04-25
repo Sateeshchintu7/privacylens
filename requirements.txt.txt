@@ -1,0 +1,45 @@
+# PrivacyLens — Full dependency list
+# MSc Cyber Security & Human Factors, 2025-26
+# Sateesh Kumar Payyavula | Supervisor: Jiankang Zhang
+
+# ── Core framework ──────────────────────────────────────────────────────────
+streamlit>=1.32.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+
+# ── LLM & NLP ──────────────────────────────────────────────────────────────
+google-generativeai>=0.5.0
+langchain>=0.1.0
+langchain-google-genai>=0.0.6
+
+# ── Document ingestion ─────────────────────────────────────────────────────
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+pdfplumber>=0.10.0
+PyPDF2>=3.0.0
+python-docx>=1.1.0
+Pillow>=10.0.0
+
+# ── Readability ────────────────────────────────────────────────────────────
+textstat>=0.7.3
+
+# ── Audio (Phase 4) ────────────────────────────────────────────────────────
+gTTS>=2.3.2
+pydub>=0.25.1
+elevenlabs>=1.0.0
+
+# ── Language detection & translation (Phase 4) ────────────────────────────
+langdetect>=1.0.9
+googletrans==4.0.0rc1
+deep-translator>=1.11.4
+
+# ── RAG / Vector search (Phase 6) ─────────────────────────────────────────
+sentence-transformers>=2.2.2
+faiss-cpu>=1.7.4
+
+# ── Visualisation (Phase 5) ────────────────────────────────────────────────
+plotly>=5.18.0
+
+# ── Optional / future ─────────────────────────────────────────────────────
+streamlit-webrtc>=0.47.0
+numpy>=1.24.0

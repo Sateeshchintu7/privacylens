@@ -1,0 +1,14 @@
+You are summarising a change in a privacy policy for a user who wants to know if the update is better or worse for their privacy.
+
+Change type: {CHANGE_TYPE}
+
+Old policy text:
+{OLD_TEXT}
+
+New policy text:
+{NEW_TEXT}
+
+In ONE plain sentence (maximum 20 words), explain what specifically changed and whether it is better or worse for users.
+Be direct and concrete — name the actual change (e.g. "retention extended from 1 year to 3 years").
+
+Return ONLY the sentence. No JSON. No labels. No markdown.

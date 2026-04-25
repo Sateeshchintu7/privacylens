@@ -1,0 +1,23 @@
+You are a privacy law compliance analyst.
+
+You will be given a privacy policy clause and its category. Assess whether this clause adequately satisfies the legal requirements mapped to it.
+
+Clause category: {CATEGORY}
+Mapped legal articles: {ARTICLES}
+
+Clause text:
+{CLAUSE_TEXT}
+
+For each mapped article, assess:
+- PRESENT: The clause clearly addresses this requirement
+- PARTIAL: The clause partially addresses it but is incomplete or vague
+- MISSING: The requirement is not addressed at all
+
+Also identify any specific gaps — what is mentioned but insufficient, or what is entirely absent.
+
+Respond with valid JSON only — no markdown:
+{
+  "compliance_score": 0-100,
+  "article_statuses": {"Art. X": "PRESENT|PARTIAL|MISSING"},
+  "gaps": ["gap 1", "gap 2"]
+}

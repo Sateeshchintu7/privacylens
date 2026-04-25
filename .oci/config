@@ -1,0 +1,6 @@
+[DEFAULT]
+user=ocid1.user.oc1..aaaaaaaaeskno7uk5bpjzgyji3m4pv2ssttql7kwef2mividl64l63ha5yca
+fingerprint=71:b1:e1:a0:71:69:01:01:e9:81:c4:fe:d2:96:58:38
+tenancy=ocid1.tenancy.oc1..aaaaaaaa7kdn7qcuvyy6ku5gz3zs4cxknchgqakk6t7wtsiq5idhnx5dfjeq
+region=ap-hyderabad-1
+key_file=C:\Users\shrav\OneDrive\Desktop\Privacy_Project_Final\.oci\sateeshchintu7@gmail.com-2026-04-24T02_49_48.276Z.pem

@@ -1,0 +1,420 @@
+"""
+nlp/clause_extractor.py — Extract and classify privacy policy clauses.
+
+4-layer extraction with guaranteed non-empty output:
+  Layer 1: Gemini structured prompt (per-chunk)
+  Layer 2: Gemini single-shot simplified prompt
+  Layer 3: Keyword-based extraction (no API, 100% reliable)
+  Layer 4: Single-clause fallback (absolute safety net)
+
+Author: Sateesh Kumar Payyavula
+Reference: Wilson et al. (2016) OPP-115 -- 12-category taxonomy
+           Adhikari, Das & Dewri (2025, arXiv:2501.10319) -- NLP pipeline
+"""
+
+import hashlib
+import json
+import logging
+import re
+import uuid
+from pathlib import Path
+
+from pydantic import BaseModel
+
+from config import BASE_DIR, CACHE_DIR
+from nlp.llm_client import call_gemini, parse_json_response
+from api.prompt_loader import load_prompt
+
+logger = logging.getLogger(__name__)
+
+# ── Taxonomy metadata ─────────────────────────────────────────────────────────
+
+GDPR_ARTICLES: dict[str, str] = {
+    "data_collection":      "Art. 13, 14",
+    "purpose_limitation":   "Art. 5(1)(b)",
+    "retention_period":     "Art. 5(1)(e)",
+    "third_party_sharing":  "Art. 13(1)(e), 28",
+    "user_rights":          "Art. 15-22",
+    "consent_mechanism":    "Art. 7",
+    "data_security":        "Art. 32",
+    "breach_notification":  "Art. 33, 34",
+    "children_data":        "Art. 8; COPPA",
+    "cross_border_transfer":"Art. 44-49",
+    "cookies_tracking":     "ePrivacy Directive",
+    "contact_info":         "Art. 13(1)(a)",
+}
+
+RISK_WEIGHTS: dict[str, float] = {
+    "data_collection": 1.2, "purpose_limitation": 1.0,
+    "retention_period": 1.3, "third_party_sharing": 1.8,
+    "user_rights": 0.9, "consent_mechanism": 1.0,
+    "data_security": 1.4, "breach_notification": 1.2,
+    "children_data": 2.0, "cross_border_transfer": 1.5,
+    "cookies_tracking": 1.1, "contact_info": 1.2,
+}
+
+VALID_CATEGORIES = set(GDPR_ARTICLES.keys())
+
+# ── Keyword lists for Layer 3 fallback ───────────────────────────────────────
+
+_CATEGORY_KEYWORDS: dict[str, list[str]] = {
+    "data_collection": [
+        "collect", "gather", "obtain", "receive", "record", "personal data",
+        "name", "email", "location", "device", "ip address", "browsing history",
+        "information we", "data we", "we may collect", "we collect", "we process",
+        "we receive", "types of information", "categories of data",
+        "account information", "usage information", "technical data",
+        "contact details", "profile", "identifier", "infer",
+    ],
+    "third_party_sharing": [
+        "share", "disclose", "transfer", "sell", "partner",
+        "third party", "third-party", "advertis", "vendor", "affiliate",
+        "we may share", "shared with", "disclosed to", "pass on", "provide to",
+        "business partner", "service provider", "trusted partner", "other compan",
+        "subprocessor", "resell", "sublicense",
+    ],
+    "user_rights": [
+        "right to", "you can", "you may", "access your", "delete", "erasure",
+        "opt out", "opt-out", "withdraw", "request", "portab", "correct",
+        "your choices", "your options", "manage your", "control your",
+        "preferences", "settings", "unsubscribe", "cancel", "contact us to",
+        "subject access", "data subject", "exercise your", "submit a request",
+    ],
+    "retention_period": [
+        "retain", "retention", "keep", "store for", "years", "months",
+        "days", "period", "duration", "as long as",
+        "delete after", "how long", "length of time", "no longer than",
+        "until", "expir", "purge", "archive",
+    ],
+    "data_security": [
+        "encrypt", "secure", "security", "protect", "ssl", "tls", "aes",
+        "safeguard", "firewall", "access control",
+        "industry standard", "reasonable measure", "technical measure",
+        "organisational measure", "administrative safeguard", "audit",
+        "penetration", "vulnerability", "two-factor", "authentication",
+    ],
+    "consent_mechanism": [
+        "consent", "agree", "agreement", "by using", "opt-in",
+        "permission", "accept", "terms", "continuing",
+        "you agree", "indicates your", "constitutes acceptance",
+        "legal basis", "legitimate interest", "by clicking",
+    ],
+    "cookies_tracking": [
+        "cookie", "track", "pixel", "beacon", "fingerprint",
+        "analytics", "behavioural", "cross-site",
+        "web beacon", "clear gif", "local storage", "session storage",
+        "google analytics", "advertising id", "interest-based",
+    ],
+    "children_data": [
+        "child", "children", "minor", "under 13", "under 18",
+        "coppa", "parental",
+        "age", "underage", "not intended for", "do not knowingly",
+        "guardian", "verifiable parental consent",
+    ],
+    "cross_border_transfer": [
+        "transfer", "international", "country", "countries",
+        "united states", "europe", "adequacy", "standard contractual",
+        "outside your", "cross-border", "overseas", "eu-u.s.", "privacy shield",
+        "binding corporate", "sccs", "derogation",
+    ],
+    "purpose_limitation": [
+        "purpose", "use your", "used for", "process", "improve",
+        "provide", "service", "research",
+        "how we use", "we use your", "why we collect", "in order to",
+        "to provide", "to improve", "to send", "to personalise",
+        "to detect", "to prevent", "to comply",
+    ],
+    "breach_notification": [
+        "breach", "incident", "notify", "notification",
+        "inform you", "security event", "unauthorised access",
+        "data breach", "without undue delay", "72 hours", "promptly notify",
+    ],
+    "contact_info": [
+        "contact", "email us", "write to", "dpo", "data officer",
+        "reach us", "privacy@", "grievance",
+        "data protection officer", "privacy team", "questions about",
+        "complaints", "how to contact", "contact details",
+    ],
+}
+
+
+# ── Pydantic model ────────────────────────────────────────────────────────────
+
+class ClauseResult(BaseModel):
+    """A single classified clause from a privacy policy."""
+    clause_id: str           # UUID
+    category: str            # one of the 12 OPP-115 categories
+    original_text: str       # exact text from the policy
+    confidence: float        # 0.0 – 1.0
+    gdpr_article: str        # e.g. "Art. 13"
+    risk_weight: float       # from RISK_WEIGHTS
+    char_start: int          # position in the full document
+    char_end: int
+
+
+# ── Chunking ──────────────────────────────────────────────────────────────────
+
+def _chunk_text(text: str, chunk_words: int = 400, overlap: int = 50) -> list[tuple[str, int]]:
+    """Split text into overlapping word chunks, tracking char offsets."""
+    words = text.split()
+    if not words:
+        return []
+    pos, positions = 0, []
+    for w in words:
+        idx = text.find(w, pos)
+        positions.append(idx)
+        pos = idx + len(w)
+
+    chunks, i = [], 0
+    while i < len(words):
+        end = min(i + chunk_words, len(words))
+        chunks.append((" ".join(words[i:end]), positions[i]))
+        if end >= len(words):
+            break
+        i += chunk_words - overlap
+    return chunks
+
+
+# ── Parsing ───────────────────────────────────────────────────────────────────
+
+def _parse_llm_response(raw: dict | list, full_text: str, chunk_offset: int) -> list[ClauseResult]:
+    """Convert raw LLM JSON into ClauseResult objects. Handles both dict and list."""
+    # Normalise: accept {"clauses": [...]} OR a bare list
+    if isinstance(raw, list):
+        items = raw
+    elif isinstance(raw, dict):
+        items = raw.get("clauses") or raw.get("results") or raw.get("data") or []
+    else:
+        return []
+
+    results = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        cat = item.get("category", "").strip().lower().replace(" ", "_")
+        if cat not in VALID_CATEGORIES:
+            continue
+        clause_text = str(item.get("text", "") or item.get("original_text", "")).strip()
+        if len(clause_text) < 30:
+            continue
+        conf = float(max(0.0, min(1.0, item.get("confidence", 0.7))))
+
+        cs = full_text.find(clause_text[:80])
+        if cs == -1:
+            cs = chunk_offset
+        results.append(ClauseResult(
+            clause_id=str(uuid.uuid4()),
+            category=cat,
+            original_text=clause_text,
+            confidence=conf,
+            gdpr_article=item.get("gdpr_article", GDPR_ARTICLES.get(cat, "")),
+            risk_weight=RISK_WEIGHTS.get(cat, 1.0),
+            char_start=cs,
+            char_end=cs + len(clause_text),
+        ))
+    return results
+
+
+def _deduplicate(clauses: list[ClauseResult]) -> list[ClauseResult]:
+    """Keep highest-confidence clause per unique text excerpt."""
+    seen: dict[str, ClauseResult] = {}
+    for c in clauses:
+        key = c.original_text[:80].strip().lower()
+        if key not in seen or c.confidence > seen[key].confidence:
+            seen[key] = c
+    return list(seen.values())
+
+
+# ── Layer 3: Keyword-based extraction ────────────────────────────────────────
+
+def _split_sentences(text: str) -> list[str]:
+    parts = re.split(r'(?<=[.!?])\s+', text)
+    return [s.strip() for s in parts if len(s.strip()) > 20]
+
+
+def _keyword_extract(text: str) -> list[ClauseResult]:
+    """
+    Layer 3: No-API keyword scan — always produces output.
+    One ClauseResult per matched category.
+    """
+    sentences = _split_sentences(text)
+    results: list[ClauseResult] = []
+
+    for category, keywords in _CATEGORY_KEYWORDS.items():
+        matched = []
+        for sentence in sentences:
+            s_lower = sentence.lower()
+            if any(kw in s_lower for kw in keywords):
+                matched.append(sentence)
+
+        if not matched:
+            continue
+
+        excerpt = " ".join(matched[:2])[:400]
+        cs = text.find(excerpt[:60]) if excerpt else 0
+        if cs == -1:
+            cs = 0
+
+        results.append(ClauseResult(
+            clause_id=str(uuid.uuid4()),
+            category=category,
+            original_text=excerpt,
+            confidence=0.65,
+            gdpr_article=GDPR_ARTICLES.get(category, ""),
+            risk_weight=RISK_WEIGHTS.get(category, 1.0),
+            char_start=cs,
+            char_end=cs + len(excerpt),
+        ))
+
+    logger.info("Keyword extraction: %d clauses", len(results))
+    return results
+
+
+# ── Layer 4: Single-clause fallback ──────────────────────────────────────────
+
+def _fallback_clause(text: str) -> list[ClauseResult]:
+    """Layer 4: Absolute safety net — guarantees > 0 clauses."""
+    sample = (text[:300] if text else "Privacy policy content.").strip()
+    return [ClauseResult(
+        clause_id=str(uuid.uuid4()),
+        category="data_collection",
+        original_text=sample,
+        confidence=0.4,
+        gdpr_article=GDPR_ARTICLES["data_collection"],
+        risk_weight=RISK_WEIGHTS["data_collection"],
+        char_start=0,
+        char_end=len(sample),
+    )]
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def extract_clauses(policy_text: str, use_cache: bool = True) -> list[ClauseResult]:
+    """
+    Extract and classify all clauses from a privacy policy.
+
+    4-layer fallback guarantees at least 1 clause is always returned.
+
+    Args:
+        policy_text: Cleaned text from ingestion.text_cleaner
+        use_cache: Cache results keyed on MD5 of policy text
+
+    Returns:
+        list[ClauseResult] — never empty
+
+    Academic ref:
+        Wilson et al. (2016) OPP-115 -- 12-category taxonomy standard
+    """
+    if not policy_text or len(policy_text.strip()) < 50:
+        logger.warning("Policy text too short (%d chars), using fallback", len(policy_text or ""))
+        return _fallback_clause(policy_text or "")
+
+    text_hash = hashlib.md5(policy_text.encode()).hexdigest()[:12]
+    cache_file = CACHE_DIR / f"clauses_{text_hash}.json"
+
+    if use_cache and cache_file.exists():
+        try:
+            data = json.loads(cache_file.read_text(encoding="utf-8"))
+            if data:  # don't use cached empty list
+                logger.info("Clause cache hit: %s (%d clauses)", cache_file.name, len(data))
+                return [ClauseResult.model_validate(c) for c in data]
+        except Exception as exc:
+            logger.warning("Clause cache read failed: %s", exc)
+
+    # ── Layer 1: Gemini structured extraction ─────────────────────────────────
+    final = _gemini_extract(policy_text)
+
+    # ── Layer 2: Gemini simplified (if Layer 1 got nothing) ──────────────────
+    if not final:
+        logger.warning("Layer 1 returned 0 clauses — trying simplified Gemini prompt")
+        final = _gemini_simple(policy_text)
+
+    # ── Layer 3: Keyword extraction (if Gemini fails entirely) ───────────────
+    if not final:
+        logger.warning("Gemini returned 0 clauses — falling back to keyword extraction")
+        final = _keyword_extract(policy_text)
+
+    # ── Layer 4: Single-clause guarantee ─────────────────────────────────────
+    if not final:
+        logger.error("All extraction layers failed — using single-clause fallback")
+        final = _fallback_clause(policy_text)
+
+    final.sort(key=lambda c: c.char_start)
+
+    if use_cache and final:
+        try:
+            cache_file.write_text(
+                json.dumps([c.model_dump() for c in final]), encoding="utf-8"
+            )
+        except OSError as exc:
+            logger.warning("Clause cache write failed: %s", exc)
+
+    logger.info("extract_clauses: %d clauses from %d chars", len(final), len(policy_text))
+    return final
+
+
+def _gemini_extract(policy_text: str) -> list[ClauseResult]:
+    """Layer 1: Structured per-chunk Gemini extraction."""
+    try:
+        prompt_template = load_prompt("prompts/clause_extraction.txt")
+    except Exception:
+        prompt_template = _DEFAULT_EXTRACTION_PROMPT
+
+    chunks = _chunk_text(policy_text)
+    all_clauses: list[ClauseResult] = []
+
+    for i, (chunk_text, char_offset) in enumerate(chunks):
+        prompt = prompt_template.replace("{POLICY_CHUNK}", chunk_text)
+        try:
+            response, _ = call_gemini(prompt, function_name="clause_extractor")
+            raw = parse_json_response(response)
+            parsed = _parse_llm_response(raw, policy_text, char_offset)
+            all_clauses.extend(parsed)
+            logger.info("Chunk %d/%d: %d clauses so far", i + 1, len(chunks), len(all_clauses))
+        except Exception as exc:
+            logger.warning("Chunk %d/%d extraction failed: %s", i + 1, len(chunks), exc)
+
+    return _deduplicate(all_clauses)
+
+
+def _gemini_simple(policy_text: str) -> list[ClauseResult]:
+    """Layer 2: Single-shot Gemini call with a simpler prompt."""
+    sample = policy_text[:4000]
+    prompt = (
+        "Extract privacy practices from this policy. "
+        "Return ONLY a JSON array, no markdown, no explanation:\n"
+        '[{"category":"data_collection","text":"exact quote","confidence":0.8}]\n\n'
+        f"Valid categories: {', '.join(VALID_CATEGORIES)}\n\n"
+        f"Policy:\n{sample}\n\nJSON array:"
+    )
+    try:
+        response, _ = call_gemini(prompt, function_name="clause_extractor_simple")
+        raw = parse_json_response(response)
+        return _parse_llm_response(raw, policy_text, 0)
+    except Exception as exc:
+        logger.warning("Layer 2 simplified Gemini failed: %s", exc)
+        return []
+
+
+_DEFAULT_EXTRACTION_PROMPT = """You are a privacy policy analyst. Extract and classify relevant clauses from the provided policy text chunk into one of 12 standardised categories, based on the OPP-115 taxonomy (Wilson et al., 2016).
+
+CATEGORIES (use EXACTLY these snake_case IDs):
+1.  data_collection       - What personal data is collected
+2.  purpose_limitation    - Why data is collected; stated purposes
+3.  retention_period      - How long data is stored
+4.  third_party_sharing   - Whether and how data is shared with third parties
+5.  user_rights           - Rights to access, correct, delete personal data
+6.  consent_mechanism     - How user consent is obtained or managed
+7.  data_security         - Technical measures to protect personal data
+8.  breach_notification   - How users are notified of data breaches
+9.  children_data         - Special rules for users under 13 or 18
+10. cross_border_transfer - Transfer of data to other countries
+11. cookies_tracking      - Use of cookies, pixels, tracking technologies
+12. contact_info          - How to contact the company with privacy questions
+
+Return ONLY valid JSON. No markdown fences, no explanations, no preamble.
+OUTPUT FORMAT: {"clauses": [{"category": "<category_id>", "text": "<exact text>", "confidence": <0.0-1.0>, "gdpr_article": "<article>"}]}
+If no relevant clauses are found, return: {"clauses": []}
+
+POLICY TEXT CHUNK:
+{POLICY_CHUNK}"""

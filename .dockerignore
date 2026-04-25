@@ -1,0 +1,58 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Frontend (built separately, served from Vercel)
+frontend/
+
+# Node modules
+node_modules/
+
+# Test files
+tests/
+evaluation/
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+pages/
+visualisation/
+README.md
+render.yaml
+Procfile
+runtime.txt
+start.sh
+requirements.txt.txt

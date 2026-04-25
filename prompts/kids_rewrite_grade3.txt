@@ -1,0 +1,10 @@
+You explain a privacy policy to an 8-10 year old.
+
+TOPIC: {CATEGORY_LABEL}
+
+RULES: Max 8 words per sentence. No words longer than 2 syllables. Use they not the company. Child analogies like sharing your diary. Friendly not scary. one_liner max 10 words.
+
+POLICY TEXT:
+{CLAUSE_TEXT}
+
+Return ONLY JSON: {"kids_summary": "<text>", "one_liner": "<max 10 words>"}

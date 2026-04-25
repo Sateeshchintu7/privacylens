@@ -1,0 +1,122 @@
+{
+  "policies_tested": 4,
+  "categories_evaluated": 12,
+  "per_category": [
+    {
+      "category": "data_collection",
+      "true_positives": 4,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "category": "purpose_limitation",
+      "true_positives": 3,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": 1.0,
+      "recall": 0.75,
+      "f1": 0.8571
+    },
+    {
+      "category": "retention_period",
+      "true_positives": 3,
+      "false_positives": 1,
+      "false_negatives": 0,
+      "precision": 0.75,
+      "recall": 1.0,
+      "f1": 0.8571
+    },
+    {
+      "category": "third_party_sharing",
+      "true_positives": 3,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": 1.0,
+      "recall": 0.75,
+      "f1": 0.8571
+    },
+    {
+      "category": "user_rights",
+      "true_positives": 4,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "category": "consent_mechanism",
+      "true_positives": 2,
+      "false_positives": 0,
+      "false_negatives": 2,
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.6667
+    },
+    {
+      "category": "data_security",
+      "true_positives": 4,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "category": "breach_notification",
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    {
+      "category": "children_data",
+      "true_positives": 3,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    {
+      "category": "cross_border_transfer",
+      "true_positives": 3,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": 1.0,
+      "recall": 0.75,
+      "f1": 0.8571
+    },
+    {
+      "category": "cookies_tracking",
+      "true_positives": 3,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "precision": 1.0,
+      "recall": 0.75,
+      "f1": 0.8571
+    },
+    {
+      "category": "contact_info",
+      "true_positives": 4,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    }
+  ],
+  "macro_f1": 0.8293,
+  "macro_precision": 0.8958,
+  "macro_recall": 0.7917,
+  "best_category": "contact_info",
+  "worst_category": "breach_notification",
+  "above_threshold": 10,
+  "timestamp": "2026-03-15T12:23:39.733654",
+  "model_used": "gemini-2.5-flash"
+}

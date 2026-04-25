@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from nlp.rag_qa import build_index, answer_question; print\\(''''OK''''\\)\")",
+      "Bash(npm run:*)",
+      "Bash(gcloud --version)",
+      "Bash(powershell -command \"\\(Invoke-WebRequest 'https://privacylens-api-610974231553.europe-west2.run.app/health' -UseBasicParsing\\).Content\")",
+      "Bash(powershell -command \"Invoke-WebRequest 'https://privacylens-api-610974231553.europe-west2.run.app/api/analyse/status/1de21cfd-af71-40b9-95d7-6247ae5423cc' -UseBasicParsing | Select-Object -ExpandProperty Content\")",
+      "Bash(powershell -command \"Invoke-WebRequest 'https://privacylens-api-610974231553.europe-west2.run.app/api/analyse' -Method POST -ContentType 'application/json' -Body '{\\\\\"input_type\\\\\":\\\\\"text\\\\\",\\\\\"content\\\\\":\\\\\"We collect your name email address precise location from GPS device information and browsing history. We share your personal data with advertising partners. You can delete your account. We use encryption. Children under 13 not permitted. Data stored 5 years.\\\\\",\\\\\"audience_level\\\\\":\\\\\"adult\\\\\",\\\\\"language\\\\\":\\\\\"en\\\\\"}' -UseBasicParsing | Select-Object -ExpandProperty Content\")",
+      "Bash(gcloud logging:*)",
+      "Bash(powershell -command \"\\(Invoke-WebRequest 'https://privacylens-api-610974231553.europe-west2.run.app/api/analyse/status/6a6969bc-c3ef-4209-be80-03f2b581909c' -UseBasicParsing\\).Content\")"
+    ]
+  }
+}

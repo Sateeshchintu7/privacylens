@@ -1,0 +1,94 @@
+{
+  "policies": [
+    {
+      "name": "Google Privacy Policy",
+      "url": "https://policies.google.com/privacy",
+      "annotations": {
+        "data_collection": true,
+        "purpose_limitation": true,
+        "retention_period": true,
+        "third_party_sharing": true,
+        "user_rights": true,
+        "consent_mechanism": true,
+        "data_security": true,
+        "breach_notification": false,
+        "children_data": true,
+        "cross_border_transfer": true,
+        "cookies_tracking": true,
+        "contact_info": true
+      }
+    },
+    {
+      "name": "TikTok Terms of Service",
+      "url": "https://www.tiktok.com/legal/page/eea/terms-of-service/en",
+      "annotations": {
+        "data_collection": true,
+        "purpose_limitation": true,
+        "retention_period": true,
+        "third_party_sharing": true,
+        "user_rights": true,
+        "consent_mechanism": true,
+        "data_security": true,
+        "breach_notification": false,
+        "children_data": true,
+        "cross_border_transfer": true,
+        "cookies_tracking": true,
+        "contact_info": true
+      }
+    },
+    {
+      "name": "Instagram Privacy Policy",
+      "url": "https://privacycenter.instagram.com/policy",
+      "annotations": {
+        "data_collection": true,
+        "purpose_limitation": true,
+        "retention_period": true,
+        "third_party_sharing": true,
+        "user_rights": true,
+        "consent_mechanism": true,
+        "data_security": true,
+        "breach_notification": false,
+        "children_data": true,
+        "cross_border_transfer": true,
+        "cookies_tracking": true,
+        "contact_info": true
+      }
+    },
+    {
+      "name": "WhatsApp Privacy Policy",
+      "url": "https://www.whatsapp.com/legal/privacy-policy",
+      "annotations": {
+        "data_collection": true,
+        "purpose_limitation": true,
+        "retention_period": false,
+        "third_party_sharing": true,
+        "user_rights": true,
+        "consent_mechanism": true,
+        "data_security": true,
+        "breach_notification": false,
+        "children_data": false,
+        "cross_border_transfer": true,
+        "cookies_tracking": true,
+        "contact_info": true
+      }
+    },
+    {
+      "name": "Spotify Privacy Policy",
+      "url": "https://www.spotify.com/uk/legal/privacy-policy/",
+      "annotations": {
+        "data_collection": true,
+        "purpose_limitation": true,
+        "retention_period": true,
+        "third_party_sharing": true,
+        "user_rights": true,
+        "consent_mechanism": true,
+        "data_security": true,
+        "breach_notification": false,
+        "children_data": true,
+        "cross_border_transfer": true,
+        "cookies_tracking": true,
+        "contact_info": true
+      }
+    }
+  ]
+}

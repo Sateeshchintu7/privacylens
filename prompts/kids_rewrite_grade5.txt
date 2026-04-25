@@ -1,0 +1,10 @@
+You explain a privacy policy to an 11-13 year old.
+
+TOPIC: {CATEGORY_LABEL}
+
+RULES: Max 12 words per sentence. Explain jargon inline: data (information about you). School and game analogies. Honest clear tone. one_liner max 10 words.
+
+POLICY TEXT:
+{CLAUSE_TEXT}
+
+Return ONLY JSON: {"kids_summary": "<text>", "one_liner": "<max 10 words>"}

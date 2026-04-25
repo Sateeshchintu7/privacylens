@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: privacylens-api
+    runtime: python-3.11
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 120
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: GOOGLE_TRANSLATE_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_TEMPERATURE
+        value: "0.3"
+      - key: GEMINI_MAX_TOKENS
+        value: "8192"
+      - key: PYTHONPATH
+        value: "."
+      - key: HF_HUB_OFFLINE
+        value: "1"
+      - key: TRANSFORMERS_OFFLINE
+        value: "1"

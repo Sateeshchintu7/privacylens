@@ -1,0 +1,174 @@
+"""
+nlp/llm_client.py — Shared Gemini LLM client for PrivacyLens.
+
+Provides a single call_gemini() entry point with:
+  - File-based caching (keyed on MD5 of prompt text)
+  - One automatic retry with 2-second backoff
+  - Structured JSONL logging of every API call
+  - Robust JSON response parsing (handles markdown blocks)
+
+Author: Sateesh Kumar Payyavula
+MSc Cyber Security & Human Factors, 2025-26
+"""
+
+import hashlib
+import json
+import logging
+import re
+import time
+from pathlib import Path
+
+from config import (
+    CACHE_DIR, GEMINI_API_KEY, GEMINI_MAX_TOKENS,
+    GEMINI_MODEL, GEMINI_TEMPERATURE, LOG_FILE,
+)
+
+logger = logging.getLogger(__name__)
+_LLM_CACHE = CACHE_DIR / "llm"
+_LLM_CACHE.mkdir(exist_ok=True)
+
+
+# ── Internal logging ──────────────────────────────────────────────────────────
+
+def _log(fn: str, ti: int, to: int, ms: int, cached: bool) -> None:
+    """Append one JSON record to logs/analysis_log.jsonl."""
+    record = {
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "model": GEMINI_MODEL, "function": fn,
+        "tokens_in": ti, "tokens_out": to, "ms": ms, "cached": cached,
+    }
+    try:
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
+    except OSError:
+        pass  # Non-fatal — logging failure must never break the pipeline
+
+
+# ── Public API call ───────────────────────────────────────────────────────────
+
+def call_gemini(
+    prompt: str,
+    function_name: str = "unknown",
+    use_cache: bool = True,
+) -> tuple[str, bool]:
+    """
+    Call the Gemini API with caching, retry, and logging.
+
+    Args:
+        prompt: Full prompt string to send to the model
+        function_name: Label for the log entry (e.g. "clause_extractor")
+        use_cache: If True, check file cache before calling API
+
+    Returns:
+        tuple: (response_text, was_cached)
+
+    Academic ref:
+        Rodriguez et al. (2024, Springer Computing) -- LLM API methodology
+    """
+    if not GEMINI_API_KEY:
+        raise ValueError(
+            "GEMINI_API_KEY not set. "
+            "Create a .env file and add: GEMINI_API_KEY=your_key_here"
+        )
+
+    cache_key = hashlib.md5(prompt.encode()).hexdigest()
+    cache_file = _LLM_CACHE / f"{cache_key}.json"
+
+    # ── Cache hit ─────────────────────────────────────────────────────────────
+    if use_cache and cache_file.exists():
+        data = json.loads(cache_file.read_text(encoding="utf-8"))
+        _log(function_name, data.get("ti", 0), data.get("to", 0), 0, cached=True)
+        return data["r"], True
+
+    # ── API call (google-genai SDK) ───────────────────────────────────────────
+    import os as _os
+    from google import genai
+    from google.genai import types
+
+    # Remove any system GOOGLE_API_KEY so SDK uses our explicit key only
+    _os.environ.pop("GOOGLE_API_KEY", None)
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    gen_config = types.GenerateContentConfig(
+        temperature=GEMINI_TEMPERATURE,
+        max_output_tokens=GEMINI_MAX_TOKENS,
+        thinking_config=types.ThinkingConfig(thinking_budget=0),
+    )
+
+    t0 = time.monotonic()
+    last_err = None
+    for attempt in range(2):
+        try:
+            resp = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=gen_config,
+            )
+            text = resp.text
+            if not text:
+                raise RuntimeError("Gemini returned empty response (resp.text is None/empty)")
+            ms = int((time.monotonic() - t0) * 1000)
+            meta = getattr(resp, "usage_metadata", None)
+            ti = getattr(meta, "prompt_token_count", len(prompt) // 4)
+            to = getattr(meta, "candidates_token_count", len(text) // 4)
+            _log(function_name, ti, to, ms, cached=False)
+            if use_cache:
+                cache_file.write_text(
+                    json.dumps({"r": text, "ti": ti, "to": to}), encoding="utf-8"
+                )
+            return text, False
+        except Exception as exc:
+            last_err = exc
+            logger.warning("Gemini attempt %d failed: %s", attempt + 1, exc)
+            if attempt == 0:
+                time.sleep(2)
+
+    raise RuntimeError(
+        f"Gemini API failed after 2 attempts: {last_err}. "
+        "Check your API key and internet connection."
+    )
+
+
+# ── JSON parsing ──────────────────────────────────────────────────────────────
+
+def parse_json_response(text: str) -> dict | list:
+    """
+    Robustly parse a JSON response from an LLM.
+
+    Handles plain JSON, markdown ```json ... ``` blocks, and embedded JSON.
+
+    Args:
+        text: Raw LLM response string
+
+    Returns:
+        Parsed dict or list, or {} on complete failure
+    """
+    if not text:
+        return {}
+    text = text.strip()
+
+    # 1. Direct parse
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # 2. Extract from markdown code block
+    m = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    if m:
+        try:
+            return json.loads(m.group(1).strip())
+        except json.JSONDecodeError:
+            pass
+
+    # 3. Find first { or [ in the raw text
+    for sc, ec in [("{", "}"), ("[", "]")]:
+        s, e = text.find(sc), text.rfind(ec)
+        if s != -1 and e > s:
+            try:
+                return json.loads(text[s : e + 1])
+            except json.JSONDecodeError:
+                pass
+
+    logger.error("JSON parse failed for response (first 200 chars): %.200s", text)
+    return {}

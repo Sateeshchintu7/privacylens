@@ -1,0 +1,46 @@
+You are a privacy policy analyst looking for internal contradictions that could mislead users.
+
+You will be given two excerpts from the SAME privacy policy, labelled Clause A and Clause B.
+
+Contradiction types to check for:
+- deny_then_share: Policy claims it does NOT share or sell data, but another clause describes sharing or selling
+- opt_out_blocked: Policy claims users can opt out of something, but other terms make it impossible or ineffective
+- retention_conflict: Different retention periods are stated for the same type of data
+- scope_conflict: Policy limits its purpose in one place but broadens it elsewhere (e.g. "only for service" then "and marketing")
+- rights_conflict: A user right is granted in one place but effectively removed or conditioned elsewhere
+- security_claim: A security guarantee is made in one place but contradicted or undermined elsewhere
+
+IMPORTANT RULES:
+1. Only flag a genuine logical contradiction — two clauses that CANNOT both be true at the same time.
+2. Do NOT flag clauses that cover different topics or simply add detail.
+3. Do NOT flag clauses that address different data types or different contexts.
+4. The contradiction must be something that would confuse or mislead a user reading the policy.
+
+WORKED EXAMPLE:
+  Clause A: "We do not sell your personal information to third parties."
+  Clause B: "We may share your personal information with our advertising partners for targeted marketing purposes."
+  → This IS a contradiction (deny_then_share): sharing data for advertising revenue is functionally selling data.
+
+---
+
+Clause A (category: {CATEGORY_A}):
+{CLAUSE_A}
+
+Clause B (category: {CATEGORY_B}):
+{CLAUSE_B}
+
+---
+
+Respond with valid JSON only — no markdown, no explanation outside the JSON:
+
+If a genuine contradiction exists:
+{
+  "is_contradiction": true,
+  "type": "one of the six types above",
+  "severity": "low|medium|high",
+  "explanation": "Plain English, max 2 sentences. Explain exactly what contradicts and why it matters to users.",
+  "example": "A concrete real-world scenario showing how this contradiction could harm or confuse a user."
+}
+
+If NO genuine contradiction:
+{"is_contradiction": false}

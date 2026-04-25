@@ -1,0 +1,124 @@
+{
+  "_meta": {
+    "description": "MAD Engine risk rules and scoring weights for PrivacyLens",
+    "scale": "0 (no risk) to 100 (maximum risk) per clause",
+    "grade_bands": {"A": "0-20", "B": "21-40", "C": "41-60", "D": "61-80", "F": "81-100"}
+  },
+  "red_flags": [
+    {
+      "id": "sells_data",
+      "label": "Sells personal data to third parties",
+      "keywords": ["sell", "sold", "sells", "sale of", "monetize your data"],
+      "risk_score": 95,
+      "emoji": "🚨"
+    },
+    {
+      "id": "no_deletion",
+      "label": "Does not allow data deletion",
+      "keywords": ["cannot delete", "do not delete", "retain indefinitely", "no deletion"],
+      "risk_score": 85,
+      "emoji": "🚨"
+    },
+    {
+      "id": "indefinite_retention",
+      "label": "Retains data indefinitely",
+      "keywords": ["indefinitely", "as long as necessary", "no set retention period"],
+      "risk_score": 75,
+      "emoji": "⚠️"
+    },
+    {
+      "id": "shares_with_police",
+      "label": "Shares data with law enforcement without warrant",
+      "keywords": ["law enforcement", "government request", "legal obligation", "court order"],
+      "risk_score": 60,
+      "emoji": "⚠️"
+    },
+    {
+      "id": "tracks_location",
+      "label": "Collects precise location data",
+      "keywords": ["GPS", "precise location", "real-time location", "geolocation"],
+      "risk_score": 70,
+      "emoji": "📍"
+    },
+    {
+      "id": "cross_device_tracking",
+      "label": "Tracks user across devices or platforms",
+      "keywords": ["cross-device", "cross-platform", "linked accounts", "device fingerprint"],
+      "risk_score": 65,
+      "emoji": "🚨"
+    },
+    {
+      "id": "collects_biometric",
+      "label": "Collects biometric or health data",
+      "keywords": ["biometric", "facial recognition", "fingerprint", "health data", "medical"],
+      "risk_score": 90,
+      "emoji": "🚨"
+    },
+    {
+      "id": "no_opt_out",
+      "label": "No meaningful opt-out option",
+      "keywords": ["no opt-out", "cannot opt out", "required for service"],
+      "risk_score": 80,
+      "emoji": "🚨"
+    },
+    {
+      "id": "children_data",
+      "label": "Knowingly collects data from children under 13",
+      "keywords": ["children", "under 13", "COPPA", "child users"],
+      "risk_score": 85,
+      "emoji": "🚨"
+    },
+    {
+      "id": "ad_targeting",
+      "label": "Uses data for targeted advertising",
+      "keywords": ["targeted ads", "personalised advertising", "ad partners", "advertising network"],
+      "risk_score": 60,
+      "emoji": "⚠️"
+    },
+    {
+      "id": "gpc_not_honored",
+      "label": "Does not honor Global Privacy Control (GPC) signal",
+      "keywords": ["do not recognize the global privacy control", "do not currently recognize gpc", "gpc signal is not honored", "we do not process gpc", "not required to honor gpc"],
+      "risk_score": 70,
+      "emoji": "🚨"
+    }
+  ],
+  "positive_signals": [
+    {
+      "id": "gdpr_compliant",
+      "label": "States GDPR compliance",
+      "keywords": ["GDPR", "General Data Protection Regulation", "EU data protection"],
+      "risk_reduction": 10
+    },
+    {
+      "id": "encryption",
+      "label": "Uses encryption for data in transit and at rest",
+      "keywords": ["encrypt", "TLS", "SSL", "AES", "end-to-end"],
+      "risk_reduction": 8
+    },
+    {
+      "id": "data_minimisation",
+      "label": "States data minimisation principle",
+      "keywords": ["only collect what we need", "data minimisation", "minimal data"],
+      "risk_reduction": 7
+    },
+    {
+      "id": "dpo_appointed",
+      "label": "Has a Data Protection Officer",
+      "keywords": ["Data Protection Officer", "DPO", "privacy officer"],
+      "risk_reduction": 5
+    },
+    {
+      "id": "user_can_delete",
+      "label": "User can delete their account and data",
+      "keywords": ["delete your account", "right to erasure", "right to be forgotten"],
+      "risk_reduction": 10
+    },
+    {
+      "id": "gpc_honored",
+      "label": "Honors Global Privacy Control (GPC) opt-out signal",
+      "keywords": ["honor the global privacy control", "honor gpc", "respects the global privacy control", "process gpc signals", "gpc opt-out", "we honor your gpc"],
+      "risk_reduction": 8
+    }
+  ]
+}

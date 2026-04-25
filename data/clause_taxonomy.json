@@ -1,0 +1,92 @@
+{
+  "_meta": {
+    "source": "Wilson et al. (2016) OPP-115 — adapted for PrivacyLens",
+    "categories": 12
+  },
+  "categories": [
+    {
+      "id": "first_party_collection",
+      "label": "First-Party Collection & Use",
+      "description": "What data the company itself collects and how it uses it",
+      "risk_weight": 1.2,
+      "gdpr_articles": ["Art. 13", "Art. 14"]
+    },
+    {
+      "id": "third_party_sharing",
+      "label": "Third-Party Sharing & Collection",
+      "description": "Whether and how data is shared with or collected by third parties",
+      "risk_weight": 1.8,
+      "gdpr_articles": ["Art. 13(1)(e)", "Art. 26", "Art. 28"]
+    },
+    {
+      "id": "user_choice",
+      "label": "User Choice & Control",
+      "description": "Options the user has to opt-in, opt-out, or limit data use",
+      "risk_weight": 1.0,
+      "gdpr_articles": ["Art. 7", "Art. 21"]
+    },
+    {
+      "id": "user_access",
+      "label": "User Access, Edit & Deletion",
+      "description": "Rights to access, correct, or delete personal data",
+      "risk_weight": 0.9,
+      "gdpr_articles": ["Art. 15", "Art. 16", "Art. 17"]
+    },
+    {
+      "id": "data_retention",
+      "label": "Data Retention",
+      "description": "How long data is kept and criteria for deletion",
+      "risk_weight": 1.3,
+      "gdpr_articles": ["Art. 5(1)(e)", "Art. 13(2)(a)"]
+    },
+    {
+      "id": "data_security",
+      "label": "Data Security",
+      "description": "Technical and organisational measures to protect data",
+      "risk_weight": 1.4,
+      "gdpr_articles": ["Art. 25", "Art. 32"]
+    },
+    {
+      "id": "policy_change",
+      "label": "Policy Change",
+      "description": "How and when users are notified of policy updates",
+      "risk_weight": 1.1,
+      "gdpr_articles": ["Art. 13", "Art. 14"]
+    },
+    {
+      "id": "do_not_track",
+      "label": "Do Not Track",
+      "description": "Whether the company honours browser Do Not Track signals",
+      "risk_weight": 1.0,
+      "gdpr_articles": ["Art. 21"]
+    },
+    {
+      "id": "specific_audiences",
+      "label": "International & Specific Audiences",
+      "description": "Age restrictions, children's data, international data transfers",
+      "risk_weight": 2.0,
+      "gdpr_articles": ["Art. 8", "Art. 44-49", "COPPA"]
+    },
+    {
+      "id": "financial_data",
+      "label": "Financial Data",
+      "description": "Collection and handling of payment or financial information",
+      "risk_weight": 1.9,
+      "gdpr_articles": ["Art. 9", "PCI-DSS"]
+    },
+    {
+      "id": "location_data",
+      "label": "Location Data",
+      "description": "Collection and use of geographic or GPS location information",
+      "risk_weight": 1.7,
+      "gdpr_articles": ["Art. 4(1)", "Art. 9"]
+    },
+    {
+      "id": "contact_information",
+      "label": "Contact Information",
+      "description": "Collection of email, phone, address, and similar identifiers",
+      "risk_weight": 1.2,
+      "gdpr_articles": ["Art. 4(1)", "Art. 13"]
+    }
+  ]
+}
