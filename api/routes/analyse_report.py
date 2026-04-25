@@ -138,8 +138,9 @@ def _generate_report(request: dict) -> dict:
         lang_name = _LANG_NAMES.get(language.lower(), language)
         lang_instruction = (
             f"\nCRITICAL LANGUAGE REQUIREMENT: "
-            f"Write your ENTIRE response in {lang_name}. "
+            f"Write your ENTIRE response in {lang_name} language using the native {lang_name} script. "
             f"ALL text fields must be in {lang_name}. "
+            f"DO NOT use English or romanised letters. "
             f"Only keep in English: GDPR, CCPA, DPDP, EU AI Act, "
             f"JSON field names, and numeric scores.\n"
         )

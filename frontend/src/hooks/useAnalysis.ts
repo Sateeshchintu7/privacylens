@@ -2,21 +2,21 @@ import { useState, useCallback, useRef } from 'react'
 import { startAnalysis, getAnalysisStatus, checkHealth, detectContradictions } from '../api/client'
 import type { AnalysisState, AnalyseRequest, AnalyseResponse, ContradictionReport } from '../types'
 
-// Progress steps — compressed to ~60s (fallback if server doesn't report progress)
+// Progress steps — compressed to ~20s target (fallback if server doesn't report progress)
 const STEPS: Array<{ pct: number; label: string; delay: number }> = [
-  { pct: 10, label: 'Connecting to server...',          delay: 500     },
-  { pct: 18, label: 'Fetching document...',             delay: 2_000   },
-  { pct: 25, label: 'Cleaning and processing text...',  delay: 4_000   },
-  { pct: 35, label: 'Extracting clauses with AI...',    delay: 8_000   },
-  { pct: 50, label: 'Scoring privacy risk...',          delay: 18_000  },
-  { pct: 65, label: 'Rewriting in plain English...',    delay: 30_000  },
-  { pct: 78, label: 'Checking GDPR compliance...',      delay: 40_000  },
-  { pct: 88, label: 'Detecting dark patterns...',       delay: 50_000  },
-  { pct: 93, label: 'Finalising analysis...',           delay: 58_000  },
+  { pct: 10, label: 'Connecting to server...',          delay: 300     },
+  { pct: 18, label: 'Fetching document...',             delay: 1_500   },
+  { pct: 25, label: 'Cleaning and processing text...',  delay: 3_000   },
+  { pct: 40, label: 'Extracting clauses with AI...',    delay: 5_000   },
+  { pct: 55, label: 'Scoring privacy risk...',          delay: 8_000   },
+  { pct: 70, label: 'Rewriting in plain English...',    delay: 12_000  },
+  { pct: 82, label: 'Checking GDPR compliance...',      delay: 16_000  },
+  { pct: 90, label: 'Detecting dark patterns...',       delay: 19_000  },
+  { pct: 95, label: 'Finalising analysis...',           delay: 22_000  },
 ]
 
-const POLL_INTERVAL_MS = 2_000   // poll every 2s (was 3s)
-const MAX_POLLS        = 120     // 4 min at 2s interval
+const POLL_INTERVAL_MS = 1_000   // poll every 1s for snappy feedback
+const MAX_POLLS        = 120     // 2 min at 1s interval
 
 export function useAnalysis() {
   const [state, setState] = useState<AnalysisState>({
@@ -137,8 +137,8 @@ export function useAnalysis() {
         if (job.status === 'running' && job.progress && job.current_step) {
           setState(s => s.status === 'loading' ? {
             ...s,
-            progress: Math.max(s.progress, job.progress),
-            currentStep: job.current_step,
+            progress: Math.max(s.progress, job.progress ?? 0),
+            currentStep: job.current_step ?? '',
           } : s)
         }
 

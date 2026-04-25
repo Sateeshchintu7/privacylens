@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BookOpen, Headphones, BarChart2, MessageCircle, Baby, FileText, RefreshCw } from 'lucide-react'
+import { BookOpen, Headphones, BarChart2, MessageCircle, Baby, FileText, RefreshCw, AlertTriangle, WifiOff, Clock } from 'lucide-react'
 import { useAnalysis } from '../hooks/useAnalysis'
 import DocumentInput from '../components/analysis/DocumentInput'
 import AnalysisProgress from '../components/analysis/AnalysisProgress'
@@ -23,6 +23,80 @@ const TABS = [
   { id: 'report' as ModeTab, icon: <FileText size={16} />,     label: 'Report' },
 ]
 
+// ── Error classifier ─────────────────────────────────────────────────────────
+function classifyError(error: string): { icon: React.ReactNode; title: string; detail: string; canAutoRetry: boolean } {
+  const lower = error.toLowerCase()
+
+  if (lower.includes('timeout') || lower.includes('timed out') || lower.includes('econnaborted')) {
+    return {
+      icon: <Clock size={20} color="#F59E0B" />,
+      title: 'Server is taking longer than expected',
+      detail: 'The analysis is still running. The result is likely cached — retry will be instant.',
+      canAutoRetry: true,
+    }
+  }
+
+  if (lower.includes('network') || lower.includes('enotfound') || lower.includes('err_internet')) {
+    return {
+      icon: <WifiOff size={20} color="#EF4444" />,
+      title: 'No internet connection',
+      detail: 'Check your connection and try again.',
+      canAutoRetry: false,
+    }
+  }
+
+  if (lower.includes('still running') || lower.includes('cached')) {
+    return {
+      icon: <Clock size={20} color="#00D4FF" />,
+      title: 'Analysis ready',
+      detail: 'The server finished processing. Click retry to load the cached result instantly.',
+      canAutoRetry: true,
+    }
+  }
+
+  if (lower.includes('500') || lower.includes('internal server')) {
+    return {
+      icon: <AlertTriangle size={20} color="#EF4444" />,
+      title: 'Server error',
+      detail: 'Something went wrong on our end. Try again or paste the text directly.',
+      canAutoRetry: false,
+    }
+  }
+
+  if (lower.includes('could not connect') || lower.includes('econnrefused')) {
+    return {
+      icon: <WifiOff size={20} color="#F59E0B" />,
+      title: 'Server is waking up',
+      detail: 'The server sleeps after 15 minutes of inactivity. It should be ready in 10–20 seconds.',
+      canAutoRetry: true,
+    }
+  }
+
+  return {
+    icon: <AlertTriangle size={20} color="#EF4444" />,
+    title: 'Analysis failed',
+    detail: error,
+    canAutoRetry: false,
+  }
+}
+
+// ── Auto-retry countdown component ───────────────────────────────────────────
+function AutoRetryCountdown({ seconds, onRetry }: { seconds: number; onRetry: () => void }) {
+  const [remaining, setRemaining] = useState(seconds)
+
+  useEffect(() => {
+    if (remaining <= 0) { onRetry(); return }
+    const t = setTimeout(() => setRemaining(r => r - 1), 1000)
+    return () => clearTimeout(t)
+  }, [remaining, onRetry])
+
+  return (
+    <span style={{ fontSize: 12, color: '#94A3B8' }}>
+      Auto-retrying in {remaining}s...
+    </span>
+  )
+}
+
 export default function AnalysePage() {
   const { state, analyse, retry, reset, contradictions, contradictionsLoading } = useAnalysis()
   const [activeTab, setActiveTab] = useState<ModeTab>('read')
@@ -30,8 +104,6 @@ export default function AnalysePage() {
   const [selectedLanguage, setSelectedLanguage] = useState('en')
 
   useEffect(() => { document.title = 'PrivacyLens — Analyse' }, [])
-
-  const isTimeoutError = state.error?.includes('timed out') || state.error?.includes('too long') || state.error?.includes('still running')
 
   const tabStyle = (t: ModeTab) => ({
     display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px',
@@ -79,39 +151,56 @@ export default function AnalysePage() {
               </div>
             )}
 
-            {/* General error + retry button */}
-            {state.error && (
-              <div style={{ marginTop: 12, padding: '16px 18px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 10 }}>
-                <div style={{ color: '#EF4444', fontSize: 14, marginBottom: 12 }}>
-                  {state.error}
+            {/* Context-aware error with auto-retry */}
+            {state.error && (() => {
+              const errInfo = classifyError(state.error)
+              return (
+                <div style={{ marginTop: 12, padding: '18px 20px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    {errInfo.icon}
+                    <span style={{ color: '#F1F5F9', fontSize: 15, fontWeight: 700 }}>{errInfo.title}</span>
+                  </div>
+                  <div style={{ color: '#94A3B8', fontSize: 14, marginBottom: 14, lineHeight: 1.6 }}>
+                    {errInfo.detail}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={retry}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 700,
+                        background: errInfo.canAutoRetry ? '#00D4FF' : 'rgba(239,68,68,0.15)',
+                        color: errInfo.canAutoRetry ? '#0A0E1A' : '#EF4444',
+                        border: 'none', cursor: 'pointer',
+                        boxShadow: errInfo.canAutoRetry ? '0 0 16px rgba(0,212,255,0.25)' : 'none',
+                      }}
+                    >
+                      <RefreshCw size={13} />
+                      {errInfo.canAutoRetry ? 'Retry — Load Cached Result' : 'Try Again'}
+                    </button>
+                    {errInfo.canAutoRetry && (
+                      <AutoRetryCountdown seconds={8} onRetry={retry} />
+                    )}
+                  </div>
                 </div>
-                <button
-                  onClick={retry}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 700,
-                    background: isTimeoutError ? '#00D4FF' : 'rgba(239,68,68,0.15)',
-                    color: isTimeoutError ? '#0A0E1A' : '#EF4444',
-                    border: 'none', cursor: 'pointer',
-                  }}
-                >
-                  <RefreshCw size={13} />
-                  {isTimeoutError ? 'Retry (will be instant if same policy)' : 'Try Again'}
-                </button>
-              </div>
-            )}
+              )
+            })()}
           </motion.div>
         )}
 
-        {/* Progress bar */}
+        {/* Progress bar — with language-aware step labels */}
         {state.status === 'loading' && (
-          <AnalysisProgress progress={state.progress} currentStep={state.currentStep} />
+          <AnalysisProgress
+            progress={state.progress}
+            currentStep={state.currentStep}
+            language={selectedLanguage}
+          />
         )}
 
         {/* Results */}
         {state.status === 'success' && state.data && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
               <div style={{ fontSize: 16, fontWeight: 600, color: '#94A3B8' }}>
                 📄 {state.data.policy_name.slice(0, 60)}
               </div>

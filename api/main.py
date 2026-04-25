@@ -163,5 +163,12 @@ def _load_routes() -> None:
     except Exception as exc:
         print(f"[routes] translate FAILED: {exc}")
 
+    try:
+        from api.routes import stats
+        app.include_router(stats.router, prefix="/api")
+        print("[routes] stats OK")
+    except Exception as exc:
+        print(f"[routes] stats FAILED: {exc}")
+
 
 _load_routes()

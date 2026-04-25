@@ -21,17 +21,45 @@ export default function ReadMode({ plainClauses, clauseRisks, darkPatterns, lang
   const { translateBatch, translating, isEnglish } = useTranslation(language)
   const [translatedSummaries, setTranslatedSummaries] = useState<string[]>([])
   const [translatedGists, setTranslatedGists] = useState<string[]>([])
+  const [translatedFlags, setTranslatedFlags] = useState<Record<string, string[]>>({})
 
   useEffect(() => {
     if (isEnglish || plainClauses.length === 0) {
       setTranslatedSummaries([])
       setTranslatedGists([])
+      setTranslatedFlags({})
       return
     }
     const summaries = plainClauses.map(c => c.plain_summary || c.what_it_means || '')
     const gists = plainClauses.map(c => c.what_it_means || '')
     translateBatch(summaries).then(setTranslatedSummaries)
     translateBatch(gists).then(setTranslatedGists)
+
+    // Translate red_flags for each category
+    const allFlags: string[] = []
+    const flagCats: string[] = []
+    const flagCounts: Record<string, number> = {}
+    for (const c of plainClauses) {
+      const risk = riskMap[c.category]
+      const flags = risk?.red_flags || []
+      flagCounts[c.category] = flags.length
+      for (const f of flags) {
+        allFlags.push(f)
+        flagCats.push(c.category)
+      }
+    }
+    if (allFlags.length > 0) {
+      translateBatch(allFlags).then(translated => {
+        const result: Record<string, string[]> = {}
+        let idx = 0
+        for (const c of plainClauses) {
+          const count = flagCounts[c.category] || 0
+          result[c.category] = translated.slice(idx, idx + count)
+          idx += count
+        }
+        setTranslatedFlags(result)
+      })
+    }
   }, [plainClauses, language]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep original index mapping so translated summaries align with clauses
@@ -116,9 +144,15 @@ export default function ReadMode({ plainClauses, clauseRisks, darkPatterns, lang
               </p>
               {risk?.red_flags?.length > 0 && (
                 <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(239,68,68,0.06)', borderRadius: 8 }}>
-                  {risk.red_flags.map((f, j) => (
-                    <div key={j} style={{ fontSize: 12, color: '#EF4444', marginBottom: 3 }}>⚠ {f}</div>
-                  ))}
+                  {risk.red_flags.map((f, j) => {
+                    const tFlags = translatedFlags[clause.category]
+                    const translatedFlag = tFlags ? tFlags[j] : undefined
+                    return (
+                      <div key={j} style={{ fontSize: 12, color: '#EF4444', marginBottom: 3 }}>
+                        ⚠ {translatedFlag || f}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
               <div style={{ marginTop: 8, fontSize: 11, color: '#475569', fontFamily: 'JetBrains Mono, monospace', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>

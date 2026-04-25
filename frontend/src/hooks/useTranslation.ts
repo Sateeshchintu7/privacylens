@@ -1,12 +1,12 @@
 /**
  * useTranslation.ts
  * Translates display text into the user's selected language via /api/translate.
- * Results are cached in-memory so the same text+language is never translated twice.
+ * Results are cached in sessionStorage so the same text+language is never translated twice across reloads.
  */
 import { useState, useCallback, useRef } from 'react'
 import { api } from '../api/client'
 
-const _cache = new Map<string, string>()
+const CACHE_PREFIX = 'pl_trans_'
 
 const ENGLISH_CODES = new Set(['en', 'en-gb', 'en-us', 'en-uk'])
 
@@ -22,28 +22,49 @@ export function useTranslation(language: string) {
       if (ENGLISH_CODES.has(langRef.current.toLowerCase()) || texts.length === 0)
         return texts
 
-      // Return from cache when all items are already translated
-      const cacheKeys = texts.map(t => `${langRef.current}:${t}`)
-      if (cacheKeys.every(k => _cache.has(k)))
-        return cacheKeys.map(k => _cache.get(k)!)
+      // Check sessionStorage cache
+      const results: string[] = []
+      const missingIdxs: number[] = []
+      const missingTexts: string[] = []
+
+      for (let i = 0; i < texts.length; i++) {
+        const t = texts[i]
+        const key = `${CACHE_PREFIX}${langRef.current}:${t}`
+        const cached = sessionStorage.getItem(key)
+        if (cached) {
+          results[i] = cached
+        } else {
+          missingIdxs.push(i)
+          missingTexts.push(t)
+        }
+      }
+
+      if (missingTexts.length === 0) {
+        return results
+      }
 
       setTranslating(true)
       try {
         const res = await api.post('/api/translate', {
-          texts,
+          texts: missingTexts,
           language: langRef.current,
         }, { timeout: 30_000 })
 
-        const translated: string[] = res.data?.translated ?? texts
+        const translated: string[] = res.data?.translated ?? missingTexts
 
-        // Cache each result
-        texts.forEach((t, i) => {
-          _cache.set(`${langRef.current}:${t}`, translated[i] ?? t)
+        // Save to cache and merge into results
+        missingTexts.forEach((t, i) => {
+          const val = translated[i] ?? t
+          sessionStorage.setItem(`${CACHE_PREFIX}${langRef.current}:${t}`, val)
+          results[missingIdxs[i]] = val
         })
 
-        return translated
+        return results
       } catch {
-        return texts
+        missingTexts.forEach((t, i) => {
+          results[missingIdxs[i]] = t
+        })
+        return results
       } finally {
         setTranslating(false)
       }

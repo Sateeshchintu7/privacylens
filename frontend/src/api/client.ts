@@ -33,6 +33,8 @@ export const getAnalysisStatus = (jobId: string) =>
     status: 'running' | 'complete' | 'error'
     result: AnalyseResponse | null
     error: string | null
+    progress?: number
+    current_step?: string
   }>(`/api/analyse/status/${jobId}`)
 
 // Kept for backward compat

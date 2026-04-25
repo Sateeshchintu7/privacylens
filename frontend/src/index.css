@@ -94,6 +94,19 @@ html, body {
 }
 .fade-up { animation: fade-up 0.4s ease-out forwards; }
 
+/* ── Skeleton shimmer animation ────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #1A2236 25%, #243049 50%, #1A2236 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+  border-radius: 8px;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--surface); }
@@ -109,3 +122,50 @@ audio {
 
 /* Focus ring */
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* ── Mobile responsiveness (375px+) ─────────────────────────────────────── */
+
+/* Tab bar horizontal scroll on mobile */
+@media (max-width: 640px) {
+  /* Ensure tabs scroll horizontally */
+  div[style*="overflowX: 'auto'"],
+  div[style*="overflow-x: auto"] {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  div[style*="overflowX: 'auto'"]::-webkit-scrollbar,
+  div[style*="overflow-x: auto"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Summary card: stack vertically */
+  .summary-card-grid {
+    flex-direction: column !important;
+  }
+
+  /* Smaller padding on mobile */
+  #root > div > div {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}
+
+/* Very small screens (375px) */
+@media (max-width: 400px) {
+  h1 {
+    font-size: 22px !important;
+  }
+
+  /* Compact buttons */
+  button {
+    padding: 8px 12px !important;
+    font-size: 12px !important;
+  }
+
+  /* Language selector compact */
+  select {
+    font-size: 11px !important;
+    padding: 4px 8px !important;
+  }
+}

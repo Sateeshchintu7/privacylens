@@ -1,14 +1,14 @@
 """
 api/routes/analyse.py -- Main policy analysis endpoint.
 
-Background-job pattern to bypass Render free tier 30-second HTTP timeout:
-
+Background-job pattern:
   POST /api/analyse                    → returns {job_id} in < 1 second
   GET  /api/analyse/status/{job_id}    → returns running | complete | error
 
-The heavy NLP pipeline runs as a FastAPI BackgroundTask (thread pool),
-so the HTTP response is sent BEFORE the work starts — Render's 30-second
-timeout never fires because the response is already delivered.
+SPEED OPTIMISATIONS:
+  - TTL-based in-memory cache (24h, keyed on MD5 of first 2000 chars)
+  - Combined extraction+risk prompt eliminates separate MAD/rewrite passes
+  - Performance stats tracking for monitoring
 
 Author: Sateesh Kumar Payyavula
 """
@@ -35,25 +35,79 @@ router = APIRouter(tags=["analyse"])
 # Survive across HTTP requests; reset only on redeploy.
 
 _JOBS: dict[str, dict] = {}   # job_id → {status, result, error}
-_CACHE: dict[str, dict] = {}  # md5(content[:3000]) → result dict
+_CACHE: dict[str, dict] = {}  # md5(content[:2000]) → {result, timestamp}
 _MAX_CACHE = 50
 _MAX_JOBS  = 200              # evict oldest jobs after this many
+_CACHE_TTL = 86400            # 24 hours in seconds
+
+
+# ── Performance stats (Mandate 5) ────────────────────────────────────────────
+
+_STATS = {
+    "total_analyses": 0,
+    "cache_hits": 0,
+    "cache_misses": 0,
+    "processing_times": [],     # list of ms values
+    "analyses_by_language": {},
+    "start_time": time.time(),
+}
+
+
+def get_stats() -> dict:
+    """Return current performance stats for /api/stats endpoint."""
+    times = _STATS["processing_times"]
+    uptime = int(time.time() - _STATS["start_time"])
+    total = _STATS["total_analyses"]
+    hits = _STATS["cache_hits"]
+    return {
+        "total_analyses": total,
+        "cache_hits": hits,
+        "cache_hit_rate": f"{(hits / total * 100):.0f}%" if total > 0 else "0%",
+        "avg_processing_ms": int(sum(times) / len(times)) if times else 0,
+        "fastest_ms": min(times) if times else 0,
+        "slowest_ms": max(times) if times else 0,
+        "analyses_by_language": dict(_STATS["analyses_by_language"]),
+        "uptime_seconds": uptime,
+    }
+
+
+def _record_stats(processing_ms: int, language: str, cached: bool) -> None:
+    """Record stats for a completed analysis."""
+    _STATS["total_analyses"] += 1
+    if cached:
+        _STATS["cache_hits"] += 1
+    else:
+        _STATS["cache_misses"] += 1
+        _STATS["processing_times"].append(processing_ms)
+        # Keep only last 100 timing samples
+        if len(_STATS["processing_times"]) > 100:
+            _STATS["processing_times"] = _STATS["processing_times"][-100:]
+    lang = language or "en"
+    _STATS["analyses_by_language"][lang] = _STATS["analyses_by_language"].get(lang, 0) + 1
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _ck(content: str) -> str:
-    return hashlib.md5(content[:3000].encode()).hexdigest()
+    return hashlib.md5(content[:2000].encode()).hexdigest()
 
 
 def _cache_get(key: str) -> dict | None:
-    return _CACHE.get(key)
+    entry = _CACHE.get(key)
+    if not entry:
+        return None
+    # Check TTL
+    if time.time() - entry.get("timestamp", 0) > _CACHE_TTL:
+        _CACHE.pop(key, None)
+        logger.info("Cache expired for key %s", key[:8])
+        return None
+    return entry.get("result")
 
 
 def _cache_set(key: str, data: dict) -> None:
     if len(_CACHE) >= _MAX_CACHE:
         _CACHE.pop(next(iter(_CACHE)))
-    _CACHE[key] = data
+    _CACHE[key] = {"result": data, "timestamp": time.time()}
 
 
 def _job_set(job_id: str, payload: dict) -> None:
@@ -81,9 +135,12 @@ async def start_analysis(
     job_id = str(uuid.uuid4())
     if cached:
         _job_set(job_id, {"status": "complete", "result": cached, "error": None})
+        _record_stats(0, request.language, cached=True)
+        logger.info("Cache HIT for key %s", ck[:8])
         return JSONResponse({"job_id": job_id, "cached": True})
 
     # Cache miss → start background job
+    logger.info("Cache MISS for key %s — starting analysis", ck[:8])
     _job_set(job_id, {"status": "running", "result": None, "error": None,
                       "progress": 5, "current_step": "Starting analysis..."})
     background_tasks.add_task(_run_job, job_id, request.model_dump(), ck)
@@ -93,7 +150,7 @@ async def start_analysis(
 @router.get("/analyse/status/{job_id}")
 async def get_job_status(job_id: str) -> JSONResponse:
     """
-    Frontend polls this every 3 seconds.
+    Frontend polls this every 1-2 seconds.
     Returns {status: running|complete|error, result: {...}|null, error: str|null}.
     """
     job = _JOBS.get(job_id)
@@ -117,9 +174,14 @@ def _run_job(job_id: str, req: dict, cache_key: str) -> None:
                 job["current_step"] = step
 
         result = _do_analysis(req, _update_progress)
+        processing_ms = result.get("processing_ms", 0)
+        language = req.get("language", "en")
+
         # Only cache if we got meaningful clause extraction results
         if len(result.get("clauses", [])) > 0:
             _cache_set(cache_key, result)
+
+        _record_stats(processing_ms, language, cached=False)
         _job_set(job_id, {"status": "complete", "result": result, "error": None,
                           "progress": 100, "current_step": "Analysis complete!"})
     except Exception as exc:
@@ -171,10 +233,6 @@ def _do_analysis(req: dict, progress_cb=None) -> dict:
         policy_name = content.strip()[:60]
 
         # Quality gate: make sure we actually got privacy policy content.
-        # Google Cache / CDN fallbacks can return page-shell HTML (nav, meta,
-        # cookie banners) that passes the 200-char length check but has no
-        # policy substance.  If the text is ≥ 500 chars but contains none of
-        # the expected privacy keywords we almost certainly got the wrong page.
         _POLICY_KW = {"privacy", "personal", "information", "collect", "data", "consent"}
         text_lower  = raw_text.lower()
         kw_hits     = sum(1 for kw in _POLICY_KW if kw in text_lower)

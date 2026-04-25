@@ -21,6 +21,19 @@ export default function SummaryCard({ data, contradictions, contradictionsLoadin
   const complianceColour = (s: number) =>
     s >= 75 ? '#10B981' : s >= 50 ? '#F59E0B' : '#EF4444'
 
+  const processingTime = (data.processing_ms / 1000).toFixed(1)
+  const analysedAt = new Date().toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+
+  // Extract domain from policy name if it's a URL
+  const policyDomain = (() => {
+    try {
+      if (data.policy_name.includes('http')) {
+        return new URL(data.policy_name).hostname.replace('www.', '')
+      }
+    } catch { /* ignore */ }
+    return null
+  })()
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
@@ -33,6 +46,33 @@ export default function SummaryCard({ data, contradictions, contradictionsLoadin
         boxShadow: '0 0 40px rgba(0,212,255,0.06)',
       }}
     >
+      {/* Quick stats bar */}
+      <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+        {[
+          { label: `${data.clauses.length} clauses`, color: '#00D4FF' },
+          { label: `${rr.top_red_flags.length} red flags`, color: '#EF4444' },
+          { label: `${darkPatterns?.total_found ?? 0} dark patterns`, color: '#F59E0B' },
+          { label: `${processingTime}s`, color: '#10B981' },
+        ].map((stat, i) => (
+          <div key={i} style={{
+            padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+            background: `${stat.color}12`, color: stat.color,
+            border: `1px solid ${stat.color}30`,
+          }}>
+            {stat.label}
+          </div>
+        ))}
+        {policyDomain && (
+          <div style={{
+            padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+            background: 'rgba(124,58,237,0.1)', color: '#A78BFA',
+            border: '1px solid rgba(124,58,237,0.25)',
+          }}>
+            🌐 {policyDomain}
+          </div>
+        )}
+      </div>
+
       <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap' }}>
         {/* Grade badge */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, minWidth: 120 }}>
@@ -127,10 +167,9 @@ export default function SummaryCard({ data, contradictions, contradictionsLoadin
               <span>{s}</span>
             </div>
           ))}
-          <div style={{ marginTop: 12 }}>
-            <span style={{ fontSize: 12, color: '#475569' }}>
-              {data.clauses.length} clauses · {(data.processing_ms / 1000).toFixed(1)}s
-            </span>
+          {/* Timestamp */}
+          <div style={{ marginTop: 12, fontSize: 11, color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
+            Analysed on {analysedAt}
           </div>
         </div>
       </div>

@@ -148,9 +148,11 @@ def score_policy(clauses: list[ClauseResult], use_cache: bool = True) -> PolicyR
     """
     Score a full policy using the two-pass MAD methodology.
 
-    Pass 1 runs on every clause (fast keyword scan).
-    Pass 2 (Gemini) runs only on clauses with keyword_score >= 50.
-    Final score = 0.4 * keyword + 0.6 * LLM where LLM pass ran.
+    If clauses already have risk_score from combined extraction, use those
+    directly — no LLM pass needed. Otherwise:
+      Pass 1 runs on every clause (fast keyword scan).
+      Pass 2 (Gemini) runs only on clauses with keyword_score >= 50.
+      Final score = 0.4 * keyword + 0.6 * LLM where LLM pass ran.
 
     Args:
         clauses: list[ClauseResult] from clause_extractor
@@ -174,6 +176,7 @@ def score_policy(clauses: list[ClauseResult], use_cache: bool = True) -> PolicyR
         kw_data.append((clause, kw_score, kw_flags, kw_pos))
 
     # Pass 2: LLM on high-risk clauses — run in parallel
+    # SKIP clauses that already have risk_score from combined extraction
     def _llm_pass(clause: ClauseResult, kw_score: float, kw_flags: list) -> tuple:
         prompt = (
             prompt_tmpl
@@ -192,9 +195,17 @@ def score_policy(clauses: list[ClauseResult], use_cache: bool = True) -> PolicyR
         return clause.clause_id, kw_score, kw_flags, False
 
     llm_results: dict[str, tuple] = {}
-    high_risk = [(c, kw_s, kw_f) for c, kw_s, kw_f, _ in kw_data if kw_s >= 50]
+    # Only run LLM on clauses missing pre-computed risk AND high keyword score
+    high_risk = [
+        (c, kw_s, kw_f) for c, kw_s, kw_f, _ in kw_data
+        if kw_s >= 50 and c.risk_score is None
+    ]
+    pre_scored = sum(1 for c in clauses if c.risk_score is not None)
+    if pre_scored:
+        logger.info("MAD: %d/%d clauses pre-scored from extraction — skipping LLM for those", pre_scored, len(clauses))
+
     if high_risk:
-        with ThreadPoolExecutor(max_workers=6) as ex:
+        with ThreadPoolExecutor(max_workers=10) as ex:
             futures = {ex.submit(_llm_pass, c, kw_s, kw_f): c.clause_id
                        for c, kw_s, kw_f in high_risk}
             for fut in as_completed(futures):
@@ -207,6 +218,23 @@ def score_policy(clauses: list[ClauseResult], use_cache: bool = True) -> PolicyR
     llm_passes = 0
 
     for clause, kw_score, kw_flags, kw_pos in kw_data:
+        # Use pre-computed risk from combined extraction if available
+        if clause.risk_score is not None:
+            pre_score = clause.risk_score
+            pre_flags = clause.red_flags or kw_flags
+            pre_pos = clause.positive_signals or kw_pos
+            final = round(_validate_score(clause.original_text, pre_score), 1)
+            all_flags.extend(pre_flags)
+            all_positives.extend(pre_pos)
+            clause_risks.append(ClauseRisk(
+                clause_id=clause.clause_id, category=clause.category,
+                keyword_score=round(kw_score, 1), llm_score=round(pre_score, 1),
+                final_score=final, risk_level=clause.risk_level or _risk_level(final),
+                red_flags=list(set(pre_flags)),
+                positive_signals=list(set(pre_pos)),
+            ))
+            continue
+
         if clause.clause_id in llm_results:
             llm_score, llm_flags, did_llm = llm_results[clause.clause_id]
             if did_llm:

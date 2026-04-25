@@ -1,15 +1,17 @@
 """
 audio/tts_engine.py -- Text-to-speech engine for PrivacyLens.
 
-gTTS (free, always available). ElevenLabs (premium, optional API key).
+Fallback chain: Google Cloud TTS → gTTS → error.
 Caches generated audio by MD5 of (text + language + audience_level).
 
 Author: Sateesh Kumar Payyavula
 Reference: WCAG 2.2 (2023) -- audio accessibility requirement
 """
 
+import base64
 import hashlib
 import logging
+import os
 import re
 from pathlib import Path
 from pydantic import BaseModel
@@ -45,13 +47,25 @@ _ELEVENLABS_VOICES = {
     "preteen": "MF3mGyEYCl7XYWbV9V6O",   # Elli
 }
 
+# Google Cloud TTS voice map
+_CLOUD_TTS_VOICES: dict[str, tuple[str, str]] = {
+    "en": ("en-GB", "en-GB-Neural2-A"),
+    "hi": ("hi-IN", "hi-IN-Neural2-A"),
+    "te": ("te-IN", "te-IN-Standard-A"),
+    "ta": ("ta-IN", "ta-IN-Neural2-A"),
+    "fr": ("fr-FR", "fr-FR-Neural2-A"),
+    "de": ("de-DE", "de-DE-Neural2-A"),
+    "es": ("es-ES", "es-ES-Neural2-A"),
+    "ar": ("ar-XA", "ar-XA-Neural2-A"),
+}
+
 
 class AudioResult(BaseModel):
     """Result of a text-to-speech generation call."""
     audio_path: str
     duration_seconds: float
     language: str
-    voice_engine: str          # "gtts" | "elevenlabs"
+    voice_engine: str          # "gtts" | "elevenlabs" | "google_cloud_tts"
     text_length: int
     audience_level: str
 
@@ -60,24 +74,28 @@ def _strip_emojis(text: str) -> str:
     """
     Remove emoji/pictograph characters that don't speak well via TTS.
 
-    IMPORTANT: uses a BLACKLIST (only emoji blocks), not a whitelist.
-    The previous whitelist stripped Indic scripts (Telugu U+0C00-0C7F,
-    Devanagari U+0900-097F, etc.) which are needed for TTS in those languages.
-    This version preserves all language scripts while removing only emoji.
+    IMPORTANT: uses a BLACKLIST of specific emoji Unicode blocks only.
+    Preserves ALL language scripts including:
+      - Telugu (U+0C00-0C7F)
+      - Devanagari/Hindi (U+0900-097F)
+      - Tamil (U+0B80-0BFF)
+      - Kannada (U+0C80-0CFF)
+      - Malayalam (U+0D00-0D7F)
+      - Bengali (U+0980-09FF)
+      - Arabic (U+0600-06FF)
+      - All other writing systems
     """
     return re.sub(
         "["
         "\U0001F600-\U0001F64F"   # emoticons
         "\U0001F300-\U0001F5FF"   # misc symbols and pictographs
         "\U0001F680-\U0001F6FF"   # transport and map symbols
-        "\U0001F700-\U0001F77F"   # alchemical symbols
-        "\U0001F780-\U0001F7FF"   # geometric shapes extended
-        "\U0001F800-\U0001F8FF"   # supplemental arrows
         "\U0001F900-\U0001F9FF"   # supplemental symbols and pictographs
-        "\U0001FA00-\U0001FA6F"   # chess symbols
-        "\U0001FA70-\U0001FAFF"   # symbols and pictographs extended-A
-        "\U00002702-\U000027B0"   # dingbats
-        "\U000024C2-\U0001F251"   # enclosed characters
+        "\U0001FA00-\U0001FAFF"   # symbols and pictographs extended-A
+        "\u2600-\u26FF"           # misc symbols (sun, stars, etc.)
+        "\u2700-\u27BF"           # dingbats
+        "\uFE00-\uFE0F"          # variation selectors
+        "\u200D"                  # zero-width joiner (emoji combiner)
         "]+",
         " ", text
     ).strip()
@@ -95,6 +113,65 @@ def _split_sentences(text: str, max_chars: int = 500) -> list[str]:
     if current.strip():
         chunks.append(current.strip())
     return chunks or [text[:500]]
+
+
+def _has_cloud_tts_credentials() -> bool:
+    """Check if Google Cloud TTS credentials are available."""
+    creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+    if creds_path and os.path.exists(creds_path):
+        return True
+    # Also check for default app credentials
+    try:
+        from google.auth import default
+        default()
+        return True
+    except Exception:
+        return False
+
+
+def _google_cloud_tts(text: str, language: str, audience_level: str, out_path: Path) -> float:
+    """
+    Generate audio using Google Cloud TTS (free tier: 1M chars/month).
+
+    Args:
+        text: Text to speak
+        language: ISO 639-1 code
+        audience_level: affects speaking speed
+        out_path: output MP3 file path
+
+    Returns:
+        Estimated duration in seconds
+    """
+    from google.cloud import texttospeech
+
+    client = texttospeech.TextToSpeechClient()
+
+    clean = _strip_emojis(text)[:5000]
+    synthesis_input = texttospeech.SynthesisInput(text=clean)
+
+    lang_code, voice_name = _CLOUD_TTS_VOICES.get(language, ("en-GB", "en-GB-Neural2-A"))
+
+    voice = texttospeech.VoiceSelectionParams(
+        language_code=lang_code,
+        name=voice_name,
+    )
+
+    speaking_rate = 0.9 if audience_level in ["child", "junior"] else 1.0
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3,
+        speaking_rate=speaking_rate,
+    )
+
+    response = client.synthesize_speech(
+        input=synthesis_input, voice=voice, audio_config=audio_config
+    )
+
+    with open(str(out_path), "wb") as f:
+        f.write(response.audio_content)
+
+    word_count = len(clean.split())
+    wpm = 100 if audience_level in ["child", "junior"] else 150
+    return round(word_count / wpm * 60, 1)
 
 
 def _gtts_generate(text: str, language: str, audience_level: str, out_path: Path) -> float:
@@ -186,11 +263,13 @@ def generate_audio(
     """
     Convert text to an MP3 audio file, with caching.
 
+    Fallback chain: Google Cloud TTS → ElevenLabs → gTTS.
+
     Args:
         text: Text to speak aloud
         language: ISO 639-1 code (e.g. "en", "hi", "fr")
         audience_level: "adult" | "teen" | "junior" | "child"
-        engine: "auto" | "gtts" | "elevenlabs"
+        engine: "auto" | "gtts" | "elevenlabs" | "google_cloud_tts"
 
     Returns:
         AudioResult with path, duration, engine used
@@ -208,6 +287,18 @@ def generate_audio(
             audience_level=audience_level,
         )
 
+    # Try Google Cloud TTS first (best quality for Indic languages)
+    if engine in ["auto", "google_cloud_tts"] and _has_cloud_tts_credentials():
+        try:
+            duration = _google_cloud_tts(text, language, audience_level, out_path)
+            logger.info("Google Cloud TTS succeeded for lang=%s", language)
+            return AudioResult(audio_path=str(out_path), duration_seconds=duration,
+                               language=language, voice_engine="google_cloud_tts",
+                               text_length=len(text), audience_level=audience_level)
+        except Exception as exc:
+            logger.warning("Google Cloud TTS failed, falling back: %s", exc)
+
+    # Try ElevenLabs (English only, premium)
     use_elevenlabs = (
         engine in ["auto", "elevenlabs"]
         and bool(ELEVENLABS_API_KEY)
@@ -223,6 +314,7 @@ def generate_audio(
         except Exception as exc:
             logger.warning("ElevenLabs failed, falling back to gTTS: %s", exc)
 
+    # gTTS fallback (always available)
     try:
         duration = _gtts_generate(text, language, audience_level, out_path)
         return AudioResult(audio_path=str(out_path), duration_seconds=duration,

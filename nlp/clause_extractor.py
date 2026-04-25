@@ -1,11 +1,15 @@
 """
-nlp/clause_extractor.py — Extract and classify privacy policy clauses.
+nlp/clause_extractor.py — Extract, classify, and score privacy policy clauses.
 
 4-layer extraction with guaranteed non-empty output:
-  Layer 1: Gemini structured prompt (per-chunk)
+  Layer 1: Gemini structured prompt (per-chunk) — now returns clauses + risk + plain summary
   Layer 2: Gemini single-shot simplified prompt
   Layer 3: Keyword-based extraction (no API, 100% reliable)
   Layer 4: Single-clause fallback (absolute safety net)
+
+Combined extraction: each clause now includes risk_score, risk_level, red_flags,
+positive_signals, plain_summary, and what_it_means — eliminating separate MAD
+and plain rewriter passes for most clauses.
 
 Author: Sateesh Kumar Payyavula
 Reference: Wilson et al. (2016) OPP-115 -- 12-category taxonomy
@@ -19,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
 import uuid
 from pathlib import Path
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -172,12 +177,23 @@ class ClauseResult(BaseModel):
     risk_weight: float       # from RISK_WEIGHTS
     char_start: int          # position in the full document
     char_end: int
+    # ── Combined extraction fields (populated from Gemini combined prompt) ──
+    plain_summary: Optional[str] = None
+    what_it_means: Optional[str] = None
+    risk_level: Optional[str] = None       # low|medium|high|critical
+    risk_score: Optional[float] = None     # 0-100
+    red_flags: Optional[list[str]] = None
+    positive_signals: Optional[list[str]] = None
 
 
 # ── Chunking ──────────────────────────────────────────────────────────────────
 
-def _chunk_text(text: str, chunk_words: int = 400, overlap: int = 50) -> list[tuple[str, int]]:
-    """Split text into overlapping word chunks, tracking char offsets."""
+def _chunk_text(text: str, chunk_words: int = 250, overlap: int = 25) -> list[tuple[str, int]]:
+    """
+    Split text into overlapping word chunks, tracking char offsets.
+
+    Reduced from 400/50 to 250/25 for faster Gemini responses (~2500 chars per chunk).
+    """
     words = text.split()
     if not words:
         return []
@@ -224,6 +240,11 @@ def _parse_llm_response(raw: dict | list, full_text: str, chunk_offset: int) -> 
         cs = full_text.find(clause_text[:80])
         if cs == -1:
             cs = chunk_offset
+
+        # Extract combined fields if present
+        risk_score_raw = item.get("risk_score")
+        risk_score = float(max(0.0, min(100.0, risk_score_raw))) if risk_score_raw is not None else None
+
         results.append(ClauseResult(
             clause_id=str(uuid.uuid4()),
             category=cat,
@@ -233,6 +254,13 @@ def _parse_llm_response(raw: dict | list, full_text: str, chunk_offset: int) -> 
             risk_weight=RISK_WEIGHTS.get(cat, 1.0),
             char_start=cs,
             char_end=cs + len(clause_text),
+            # Combined extraction fields
+            plain_summary=item.get("plain_summary") or None,
+            what_it_means=item.get("what_it_means") or None,
+            risk_level=item.get("risk_level") or None,
+            risk_score=risk_score,
+            red_flags=item.get("red_flags") if isinstance(item.get("red_flags"), list) else None,
+            positive_signals=item.get("positive_signals") if isinstance(item.get("positive_signals"), list) else None,
         ))
     return results
 
@@ -402,7 +430,7 @@ def _gemini_extract(policy_text: str) -> list[ClauseResult]:
             return []
 
     all_clauses: list[ClauseResult] = []
-    with ThreadPoolExecutor(max_workers=min(len(chunks), 4)) as ex:
+    with ThreadPoolExecutor(max_workers=min(len(chunks), 15)) as ex:
         futures = {
             ex.submit(_extract_chunk, i, ct, co): i
             for i, (ct, co) in enumerate(chunks)

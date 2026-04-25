@@ -109,7 +109,7 @@ def _translate_text(text: str, target_lang: str) -> str:
 
         # Validate Indic script presence
         script_chars = _count_script_chars(translated, target_lang)
-        if script_chars < 3 and target_lang in _INDIC_RANGES:
+        if script_chars < 5 and target_lang in _INDIC_RANGES:
             logger.warning(
                 "Translation for %s has only %d native script chars — retrying",
                 target_lang, script_chars
@@ -121,7 +121,7 @@ def _translate_text(text: str, target_lang: str) -> str:
                 f"Translate: {text[:300]}"
             )
             retry = _call_gemini(retry_prompt)
-            if _count_script_chars(retry, target_lang) >= 3:
+            if _count_script_chars(retry, target_lang) >= 5:
                 logger.info("Retry translation OK for %s: %d script chars", target_lang, _count_script_chars(retry, target_lang))
                 return retry
             logger.error("Both translation attempts failed for %s — using English", target_lang)
