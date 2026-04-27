@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send } from 'lucide-react'
 import { askQuestion } from '../../api/client'
-import LoadingSpinner from '../ui/LoadingSpinner'
 import type { AnalyseResponse, AskResponse } from '../../types'
 
 const SUGGESTED_QUESTIONS = [
@@ -21,7 +20,28 @@ interface Message {
   answer?: AskResponse
 }
 
-interface Props { data: AnalyseResponse; audienceLevel: string; policyText: string }
+interface Props {
+  data: AnalyseResponse
+  audienceLevel: string
+  policyText: string
+  language?: string
+}
+
+function Spinner({ size = 16 }: { size?: number }) {
+  return (
+    <>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{
+        width: size, height: size,
+        border: '2px solid rgba(0,212,255,0.2)',
+        borderTop: '2px solid #00D4FF',
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+        display: 'inline-block', flexShrink: 0,
+      }} />
+    </>
+  )
+}
 
 export default function AskMode({ data, audienceLevel, policyText }: Props) {
   const [messages, setMessages] = useState<Message[]>([])
@@ -58,7 +78,6 @@ export default function AskMode({ data, audienceLevel, policyText }: Props) {
 
   return (
     <div style={{ background: '#111827', border: '1px solid #1E2D45', borderRadius: 16, padding: 24 }}>
-      {/* Suggested chips */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
         {SUGGESTED_QUESTIONS.map(q => (
           <button
@@ -77,7 +96,6 @@ export default function AskMode({ data, audienceLevel, policyText }: Props) {
         ))}
       </div>
 
-      {/* Chat window */}
       <div style={{ minHeight: 300, maxHeight: 400, overflowY: 'auto', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {messages.length === 0 && (
           <div style={{ textAlign: 'center', color: '#475569', padding: '40px 0', fontSize: 14 }}>
@@ -113,13 +131,12 @@ export default function AskMode({ data, audienceLevel, policyText }: Props) {
         ))}
         {loading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#475569', fontSize: 13 }}>
-            <LoadingSpinner size={16} /> Searching the policy...
+            <Spinner size={16} /> Searching the policy...
           </div>
         )}
         <div ref={bottomRef} />
       </div>
 
-      {/* Input bar */}
       <div style={{ display: 'flex', gap: 8 }}>
         <input
           value={input}

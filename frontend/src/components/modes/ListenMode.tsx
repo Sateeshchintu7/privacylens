@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Volume2, Download, Mic } from 'lucide-react'
 import { useAudio } from '../../hooks/useAudio'
-import LoadingSpinner from '../ui/LoadingSpinner'
 import type { AnalyseResponse } from '../../types'
 
 const LANGUAGES = [
@@ -42,6 +41,22 @@ interface Props {
 
 type ContentType = 'summary' | 'redflags' | 'full'
 
+function Spinner({ size = 24, color = '#fff' }: { size?: number; color?: string }) {
+  return (
+    <>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{
+        width: size, height: size,
+        border: `2px solid rgba(255,255,255,0.2)`,
+        borderTop: `2px solid ${color}`,
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+        display: 'inline-block', flexShrink: 0,
+      }} />
+    </>
+  )
+}
+
 export default function ListenMode({ data, audienceLevel, onLanguageChange }: Props) {
   const [lang, setLang] = useState('en')
 
@@ -52,11 +67,10 @@ export default function ListenMode({ data, audienceLevel, onLanguageChange }: Pr
   const [contentType, setContentType] = useState<ContentType>('summary')
   const { audioState, generate, downloadAudio } = useAudio()
 
-  const MAX_AUDIO_CHARS = 1200 // ~1.5 min of speech; keeps gTTS fast on Render
+  const MAX_AUDIO_CHARS = 1200
 
   const buildText = (): string => {
     if (contentType === 'summary') {
-      // Build full prose sentences — translates better than "Label: text" format
       const parts: string[] = []
       const grade = data.risk_report?.grade || 'unknown'
       const score = data.risk_report?.overall_score ?? 0
@@ -74,9 +88,7 @@ export default function ListenMode({ data, audienceLevel, onLanguageChange }: Pr
       }
 
       const topClauses = data.plain_clauses.slice(0, 3)
-      topClauses.forEach(c => {
-        if (c.plain_summary) parts.push(c.plain_summary)
-      })
+      topClauses.forEach(c => { if (c.plain_summary) parts.push(c.plain_summary) })
 
       return parts.join(' ').slice(0, MAX_AUDIO_CHARS)
     }
@@ -88,7 +100,6 @@ export default function ListenMode({ data, audienceLevel, onLanguageChange }: Pr
         flags.join('. ')
       ).slice(0, MAX_AUDIO_CHARS)
     }
-    // full: all clause summaries as prose
     const full = data.plain_clauses
       .map(c => c.plain_summary || '')
       .filter(Boolean)
@@ -109,7 +120,6 @@ export default function ListenMode({ data, audienceLevel, onLanguageChange }: Pr
   return (
     <div style={{ background: '#111827', border: '1px solid #1E2D45', borderRadius: 16, padding: 28 }}>
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 24 }}>
-        {/* Language */}
         <div style={{ flex: 1, minWidth: 160 }}>
           <div style={{ fontSize: 12, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Language</div>
           <select
@@ -120,7 +130,6 @@ export default function ListenMode({ data, audienceLevel, onLanguageChange }: Pr
           </select>
         </div>
 
-        {/* Content type */}
         <div style={{ flex: 2 }}>
           <div style={{ fontSize: 12, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Content</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -131,7 +140,6 @@ export default function ListenMode({ data, audienceLevel, onLanguageChange }: Pr
         </div>
       </div>
 
-      {/* Generate button */}
       <button
         onClick={handleGenerate}
         disabled={audioState.isGenerating}
@@ -145,18 +153,16 @@ export default function ListenMode({ data, audienceLevel, onLanguageChange }: Pr
         }}
       >
         {audioState.isGenerating
-          ? <><LoadingSpinner size={18} color="#fff" /> Generating audio...</>
+          ? <><Spinner size={18} /> Generating audio...</>
           : <><Volume2 size={18} /> Generate Audio</>}
       </button>
 
-      {/* Error */}
       {audioState.error && (
         <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(239,68,68,0.1)', borderRadius: 8, color: '#EF4444', fontSize: 13 }}>
           {audioState.error}
         </div>
       )}
 
-      {/* Audio player */}
       {audioState.audioUrl && (
         <div style={{ marginTop: 20 }}>
           <div style={{ marginBottom: 8, fontSize: 13, color: '#94A3B8' }}>
@@ -173,7 +179,6 @@ export default function ListenMode({ data, audienceLevel, onLanguageChange }: Pr
         </div>
       )}
 
-      {/* Voice input stub */}
       <div style={{ marginTop: 20, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#1A2236', borderRadius: 8, border: '1px solid #1E2D45' }}>
         <Mic size={16} color="#475569" />
         <span style={{ fontSize: 13, color: '#475569' }}>Voice input — coming soon</span>

@@ -279,6 +279,7 @@ export default function AnalysePage() {
                     clauseRisks={state.data.risk_report.clause_risks}
                     darkPatterns={state.data.dark_patterns}
                     language={selectedLanguage}
+                    loading={false}
                   />
                 )}
                 {activeTab === 'listen' && (
@@ -289,15 +290,16 @@ export default function AnalysePage() {
                   />
                 )}
                 {activeTab === 'see' && (
-                  <SeeMode data={state.data} policyName={state.data.policy_name} />
+                  <SeeMode data={state.data} policyName={state.data.policy_name} language={selectedLanguage} />
                 )}
                 {activeTab === 'ask' && (
-                  <AskMode data={state.data} audienceLevel="adult" policyText={state.policyText} />
+                  <AskMode data={state.data} audienceLevel="adult" policyText={state.policyText} language={selectedLanguage} />
                 )}
                 {activeTab === 'kids' && (
                   <KidsMode
                     data={state.data}
                     audienceLevel="child"
+                    language={selectedLanguage}
                   />
                 )}
                 {activeTab === 'report' && (

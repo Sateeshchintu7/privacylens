@@ -1,8 +1,5 @@
 import { motion } from 'framer-motion'
-import RiskGradeBadge from '../ui/RiskGradeBadge'
-import ProgressBar from '../ui/ProgressBar'
 import type { AnalyseResponse, ContradictionReport, DarkPatternReport } from '../../types'
-import LoadingSpinner from '../ui/LoadingSpinner'
 
 interface Props {
   data: AnalyseResponse
@@ -10,6 +7,71 @@ interface Props {
   contradictionsLoading?: boolean
   darkPatterns?: DarkPatternReport | null
 }
+
+// ── Inlined UI components ─────────────────────────────────────────────────────
+
+function Spinner({ size = 14, color = '#475569' }: { size?: number; color?: string }) {
+  return (
+    <>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{
+        width: size, height: size,
+        border: `2px solid rgba(148,163,184,0.2)`,
+        borderTop: `2px solid ${color}`,
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+        display: 'inline-block', flexShrink: 0,
+      }} />
+    </>
+  )
+}
+
+function Bar({ value, color = '#00D4FF', height = 5 }: { value: number; color?: string; height?: number }) {
+  return (
+    <div style={{ background: '#1E2D45', borderRadius: height, height, overflow: 'hidden' }}>
+      <div style={{
+        width: `${Math.min(100, Math.max(0, value))}%`, height: '100%',
+        background: color, borderRadius: height,
+        boxShadow: `0 0 8px ${color}60`,
+        transition: 'width 0.6s ease',
+      }} />
+    </div>
+  )
+}
+
+const GRADE_COLOURS: Record<string, { bg: string; glow: string }> = {
+  A: { bg: '#10B981', glow: 'rgba(16,185,129,0.4)'  },
+  B: { bg: '#34D399', glow: 'rgba(52,211,153,0.3)'  },
+  C: { bg: '#F59E0B', glow: 'rgba(245,158,11,0.4)'  },
+  D: { bg: '#F97316', glow: 'rgba(249,115,22,0.4)'  },
+  F: { bg: '#EF4444', glow: 'rgba(239,68,68,0.5)'   },
+}
+
+function GradeBadge({ grade, score }: { grade: string; score: number }) {
+  const c = GRADE_COLOURS[grade] ?? { bg: '#475569', glow: 'transparent' }
+  return (
+    <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      <div
+        className="pulse-in"
+        style={{
+          width: 96, height: 96, borderRadius: 12,
+          background: c.bg,
+          boxShadow: `0 0 48px ${c.glow}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: 48, fontWeight: 900, color: '#fff',
+        }}
+      >
+        {grade}
+      </div>
+      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 16, color: '#94A3B8' }}>
+        {score.toFixed(0)}/100
+      </span>
+    </div>
+  )
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function SummaryCard({ data, contradictions, contradictionsLoading, darkPatterns }: Props) {
   const { risk_report: rr, readability, compliance, plain_clauses } = data
@@ -24,7 +86,6 @@ export default function SummaryCard({ data, contradictions, contradictionsLoadin
   const processingTime = (data.processing_ms / 1000).toFixed(1)
   const analysedAt = new Date().toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
-  // Extract domain from policy name if it's a URL
   const policyDomain = (() => {
     try {
       if (data.policy_name.includes('http')) {
@@ -76,7 +137,7 @@ export default function SummaryCard({ data, contradictions, contradictionsLoadin
       <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap' }}>
         {/* Grade badge */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, minWidth: 120 }}>
-          <RiskGradeBadge grade={rr.grade} score={rr.overall_score} size="lg" animate />
+          <GradeBadge grade={rr.grade} score={rr.overall_score} />
           <div style={{ fontSize: 12, color: '#94A3B8', textAlign: 'center', maxWidth: 120 }}>
             {rr.grade_explanation}
           </div>
@@ -104,7 +165,7 @@ export default function SummaryCard({ data, contradictions, contradictionsLoadin
 
           {contradictionsLoading && (
             <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <LoadingSpinner size={14} color="#475569" />
+              <Spinner size={14} color="#475569" />
               <span style={{ fontSize: 13, color: '#475569' }}>Checking for contradictions...</span>
             </div>
           )}
@@ -146,7 +207,7 @@ export default function SummaryCard({ data, contradictions, contradictionsLoadin
                       {c.score.toFixed(0)}%
                     </span>
                   </div>
-                  <ProgressBar value={c.score} color={complianceColour(c.score)} height={5} />
+                  <Bar value={c.score} color={complianceColour(c.score)} height={5} />
                 </div>
               ))}
             </div>
@@ -167,7 +228,6 @@ export default function SummaryCard({ data, contradictions, contradictionsLoadin
               <span>{s}</span>
             </div>
           ))}
-          {/* Timestamp */}
           <div style={{ marginTop: 12, fontSize: 11, color: '#475569', fontFamily: 'JetBrains Mono, monospace' }}>
             Analysed on {analysedAt}
           </div>

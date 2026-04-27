@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Volume2, Lock } from 'lucide-react'
 import { useAudio } from '../../hooks/useAudio'
-import LoadingSpinner from '../ui/LoadingSpinner'
 import { startKidsAnalysis, getKidsStatus } from '../../api/client'
 import type { KidsReport, KidsResponse, AnalyseResponse } from '../../types'
 
@@ -21,10 +20,27 @@ type AgeGroup = 'child' | 'junior' | 'teen'
 interface Props {
   data: AnalyseResponse | null
   audienceLevel: string
+  language?: string
 }
 
 const KIDS_POLL_INTERVAL = 3_000
-const KIDS_MAX_POLLS = 30  // 90s max
+const KIDS_MAX_POLLS = 30
+
+function Spinner({ size = 36, color = '#00D4FF' }: { size?: number; color?: string }) {
+  return (
+    <>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{
+        width: size, height: size,
+        border: `2px solid rgba(0,212,255,0.2)`,
+        borderTop: `2px solid ${color}`,
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+        display: 'inline-block', flexShrink: 0,
+      }} />
+    </>
+  )
+}
 
 export default function KidsMode({ data, audienceLevel }: Props) {
   const [ageGroup, setAgeGroup] = useState<AgeGroup>('junior')
@@ -87,12 +103,12 @@ export default function KidsMode({ data, audienceLevel }: Props) {
   useEffect(() => {
     handleAgeSelect(ageGroup)
     return stopPolling
-  }, [ageGroup, data])
+  }, [ageGroup, data]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const report: KidsReport | null = kidsData?.report ?? null
   const vStyle = VERDICT_STYLES[report?.verdict as keyof typeof VERDICT_STYLES] ?? VERDICT_STYLES['ASK_PARENT']
 
-  const ageBtn = (a: AgeGroup, _label: string) => ({
+  const ageBtn = (a: AgeGroup) => ({
     padding: '14px 28px', borderRadius: 28, minWidth: 120, fontSize: 15, fontWeight: 700,
     cursor: 'pointer', border: `2px solid ${ageGroup === a ? '#00D4FF' : '#1E2D45'}`,
     background: ageGroup === a ? '#00D4FF' : 'transparent',
@@ -113,11 +129,10 @@ export default function KidsMode({ data, audienceLevel }: Props) {
 
   return (
     <div style={{ background: '#0F1729', borderRadius: 16, padding: 24, minHeight: 400 }}>
-      {/* Age selector */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 28, justifyContent: 'center', flexWrap: 'wrap' }}>
-        <button style={ageBtn('child', '8–10 👧')} onClick={() => setAgeGroup('child')}>8–10 👧</button>
-        <button style={ageBtn('junior', '11–13 🧑')} onClick={() => setAgeGroup('junior')}>11–13 🧑</button>
-        <button style={ageBtn('teen', '14–17 🧒')} onClick={() => setAgeGroup('teen')}>14–17 🧒</button>
+        <button style={ageBtn('child')} onClick={() => setAgeGroup('child')}>8–10 👧</button>
+        <button style={ageBtn('junior')} onClick={() => setAgeGroup('junior')}>11–13 🧑</button>
+        <button style={ageBtn('teen')} onClick={() => setAgeGroup('teen')}>14–17 🧒</button>
       </div>
 
       {error && (
@@ -128,13 +143,13 @@ export default function KidsMode({ data, audienceLevel }: Props) {
 
       {loading && !error && (
         <div style={{ textAlign: 'center', padding: '60px 0', color: '#94A3B8' }}>
-          <LoadingSpinner size={36} /> <div style={{ marginTop: 16 }}>Generating kids version...</div>
+          <Spinner size={36} />
+          <div style={{ marginTop: 16 }}>Generating kids version...</div>
         </div>
       )}
 
       {!loading && report && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Verdict card */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
             style={{
@@ -172,16 +187,16 @@ export default function KidsMode({ data, audienceLevel }: Props) {
                 background: `${vStyle.border}33`, color: '#F1F5F9',
               }}
             >
-              {audioState.isGenerating ? <><LoadingSpinner size={16} /> Generating...</> : <><Volume2 size={18} /> Read this to me</>}
+              {audioState.isGenerating
+                ? <><Spinner size={16} color="#F1F5F9" /> Generating...</>
+                : <><Volume2 size={18} /> Read this to me</>}
             </button>
             {audioState.audioUrl && !audioState.isGenerating && (
               <audio controls src={audioState.audioUrl} style={{ width: '100%', maxWidth: 320, margin: '12px auto 0', display: 'block' }} />
             )}
           </motion.div>
 
-          {/* Two columns */}
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            {/* Concerns */}
             {report.concerns?.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
@@ -197,7 +212,6 @@ export default function KidsMode({ data, audienceLevel }: Props) {
               </motion.div>
             )}
 
-            {/* Positives */}
             {report.positives?.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}
@@ -214,7 +228,6 @@ export default function KidsMode({ data, audienceLevel }: Props) {
             )}
           </div>
 
-          {/* Clause cards */}
           {report.clauses?.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: '#94A3B8', marginBottom: 4 }}>Section by section:</div>
@@ -241,7 +254,6 @@ export default function KidsMode({ data, audienceLevel }: Props) {
             </div>
           )}
 
-          {/* Footer note */}
           <div style={{ textAlign: 'center', padding: '16px', background: 'rgba(0,212,255,0.04)', borderRadius: 12, border: '1px solid #1E2D45' }}>
             <Lock size={18} color="#475569" style={{ margin: '0 auto 8px', display: 'block' }} />
             <p style={{ fontSize: 14, color: '#475569', margin: 0, lineHeight: 1.6 }}>
@@ -251,7 +263,7 @@ export default function KidsMode({ data, audienceLevel }: Props) {
         </div>
       )}
 
-      {!loading && !report && (
+      {!loading && !report && !error && (
         <div style={{ textAlign: 'center', padding: '60px 0', color: '#475569' }}>
           Select an age group above to load Kids Mode.
         </div>

@@ -47,6 +47,8 @@ _ALLOWED_ORIGINS = [
     "https://privacylens-5yhe.vercel.app",
     "https://privacylens.vercel.app",
     "https://privacylens-api-610974231553.europe-west2.run.app",
+    "http://16.170.254.195",
+    "http://16.170.254.195:8000",
 ]
 
 app.add_middleware(

@@ -10,6 +10,7 @@ interface Props {
   clauseRisks: ClauseRisk[]
   darkPatterns?: DarkPatternReport
   language?: string
+  loading?: boolean
 }
 
 const RISK_COLOURS = RISK_COLORS as Record<string, string>
@@ -35,18 +36,13 @@ export default function ReadMode({ plainClauses, clauseRisks, darkPatterns, lang
     translateBatch(summaries).then(setTranslatedSummaries)
     translateBatch(gists).then(setTranslatedGists)
 
-    // Translate red_flags for each category
     const allFlags: string[] = []
-    const flagCats: string[] = []
     const flagCounts: Record<string, number> = {}
     for (const c of plainClauses) {
       const risk = riskMap[c.category]
       const flags = risk?.red_flags || []
       flagCounts[c.category] = flags.length
-      for (const f of flags) {
-        allFlags.push(f)
-        flagCats.push(c.category)
-      }
+      for (const f of flags) allFlags.push(f)
     }
     if (allFlags.length > 0) {
       translateBatch(allFlags).then(translated => {
@@ -62,7 +58,6 @@ export default function ReadMode({ plainClauses, clauseRisks, darkPatterns, lang
     }
   }, [plainClauses, language]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keep original index mapping so translated summaries align with clauses
   const sortedWithIdx = plainClauses
     .map((c, origIdx) => ({ clause: c, origIdx }))
     .sort((a, b) => {
@@ -92,10 +87,8 @@ export default function ReadMode({ plainClauses, clauseRisks, darkPatterns, lang
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
             style={{ background: '#111827', border: `1px solid ${colour}33`, borderLeft: `4px solid ${colour}`, borderRadius: 10, overflow: 'hidden' }}
           >
-            {/* DP-3 Level 1: always-visible gist — icon + name + risk badge */}
             <summary style={{ padding: '14px 18px', cursor: 'pointer', listStyle: 'none', userSelect: 'none' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                {/* DP-2: coloured SVG icon container matching risk level */}
                 <div style={{
                   width: 32, height: 32, borderRadius: 8, flexShrink: 0,
                   background: RISK_BG_MAP[level] ?? 'rgba(148,163,184,0.1)',
@@ -119,25 +112,20 @@ export default function ReadMode({ plainClauses, clauseRisks, darkPatterns, lang
                 )}
                 <span style={{ fontSize: 11, color: '#475569' }}>▼</span>
               </div>
-              {/* DP-3 Level 1 gist — one-line summary always visible */}
               {clause.what_it_means && (
                 <div style={{ fontSize: 13, color: '#94A3B8', marginTop: 5, paddingLeft: 34, lineHeight: 1.5 }}>
                   {translatedGists[origIdx] || clause.what_it_means}
                 </div>
               )}
-              {/* DP-2: data type SVG icons detected from clause text */}
               {(() => {
                 const icons = getDataTypeIcons(clause.plain_summary || '')
                 return icons.length > 0 ? (
                   <div style={{ paddingLeft: 44, marginTop: 4, display: 'flex', gap: 6, color: '#64748B' }}>
-                    {icons.map((icon, i) => (
-                      <span key={i}>{icon}</span>
-                    ))}
+                    {icons.map((icon, i) => <span key={i}>{icon}</span>)}
                   </div>
                 ) : null
               })()}
             </summary>
-            {/* DP-3 Level 2: detail on expand */}
             <div style={{ padding: '4px 18px 18px', borderTop: '1px solid #1E2D45' }}>
               <p style={{ fontSize: 15, color: '#F1F5F9', lineHeight: 1.7, margin: '12px 0 8px' }}>
                 {translatedSummaries[origIdx] || clause.plain_summary}

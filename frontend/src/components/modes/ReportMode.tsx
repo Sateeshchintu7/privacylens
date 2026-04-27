@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { startReport, getReportStatus } from '../../api/client'
-import LoadingSpinner from '../ui/LoadingSpinner'
-import ProgressBar from '../ui/ProgressBar'
 import type { AnalyseResponse } from '../../types'
 
 interface Props { data: AnalyseResponse; language?: string }
@@ -10,13 +8,52 @@ interface Props { data: AnalyseResponse; language?: string }
 type Report = Record<string, unknown>
 
 const POLL_INTERVAL = 3_000
-const MAX_POLLS = 40 // 2 min
+const MAX_POLLS = 40
 
 function scoreColor(s: number) {
   if (s >= 75) return '#10B981'
   if (s >= 50) return '#F59E0B'
   if (s >= 25) return '#F97316'
   return '#EF4444'
+}
+
+function Spinner({ size = 40, color = '#00D4FF' }: { size?: number; color?: string }) {
+  return (
+    <>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{
+        width: size, height: size,
+        border: `3px solid rgba(0,212,255,0.2)`,
+        borderTop: `3px solid ${color}`,
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+        display: 'inline-block',
+      }} />
+    </>
+  )
+}
+
+function Bar({ value, color = '#00D4FF', height = 6, label }: { value: number; color?: string; height?: number; label?: string }) {
+  return (
+    <div>
+      {label != null && label !== '' && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+          <span style={{ fontSize: 13, color: '#94A3B8' }}>{label}</span>
+          <span style={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace', color: '#F1F5F9' }}>
+            {value.toFixed(0)}%
+          </span>
+        </div>
+      )}
+      <div style={{ background: '#1E2D45', borderRadius: height, height, overflow: 'hidden' }}>
+        <div style={{
+          width: `${Math.min(100, Math.max(0, value))}%`, height: '100%',
+          background: color, borderRadius: height,
+          boxShadow: `0 0 8px ${color}60`,
+          transition: 'width 0.6s ease',
+        }} />
+      </div>
+    </div>
+  )
 }
 
 export default function ReportMode({ data, language = 'en' }: Props) {
@@ -74,11 +111,11 @@ export default function ReportMode({ data, language = 'en' }: Props) {
       })
 
     return stopPolling
-  }, [data, language])
+  }, [data, language]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return (
     <div style={{ background: '#111827', border: '1px solid #1E2D45', borderRadius: 16, padding: 40, textAlign: 'center' }}>
-      <LoadingSpinner size={40} />
+      <Spinner size={40} />
       <div style={{ marginTop: 16, color: '#94A3B8', fontSize: 15 }}>Generating comprehensive report...</div>
       <div style={{ marginTop: 8, color: '#475569', fontSize: 13 }}>One Gemini call analyses the whole policy coherently</div>
     </div>
@@ -194,7 +231,7 @@ export default function ReportMode({ data, language = 'en' }: Props) {
                     <span style={{ fontSize: 13, fontWeight: 700, color: '#F1F5F9', textTransform: 'uppercase' }}>{label}</span>
                     <span style={{ fontSize: 22, fontWeight: 800, color: scoreColor(score) }}>{score}%</span>
                   </div>
-                  <ProgressBar value={score} color={scoreColor(score)} height={8} />
+                  <Bar value={score} color={scoreColor(score)} height={8} />
                   {c.explanation != null && (
                     <div style={{ marginTop: 8, fontSize: 12, color: '#94A3B8' }}>{String(c.explanation)}</div>
                   )}

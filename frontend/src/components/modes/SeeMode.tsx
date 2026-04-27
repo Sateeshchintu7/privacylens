@@ -1,15 +1,38 @@
 import { useState } from 'react'
-import type { AnalyseResponse, ClauseRisk, PolicyRiskReport } from '../../types'
-import ProgressBar from '../ui/ProgressBar'
+import type { AnalyseResponse, ClauseRisk } from '../../types'
 import { RISK_COLORS } from '../../constants/risk'
 
-interface Props { data: AnalyseResponse; policyName: string }
+interface Props { data: AnalyseResponse; policyName: string; language?: string }
 type SubTab = 'risk' | 'gdpr' | 'compliance' | 'sankey'
+
 function scoreColor(s: number) {
   if (s <= 25) return '#10B981'
   if (s <= 50) return '#F59E0B'
   if (s <= 75) return '#F97316'
   return '#EF4444'
+}
+
+function Bar({ value, color = '#00D4FF', height = 6, label }: { value: number; color?: string; height?: number; label?: string }) {
+  return (
+    <div>
+      {label != null && label !== '' && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+          <span style={{ fontSize: 13, color: '#94A3B8' }}>{label}</span>
+          <span style={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace', color: '#F1F5F9' }}>
+            {value.toFixed(0)}%
+          </span>
+        </div>
+      )}
+      <div style={{ background: '#1E2D45', borderRadius: height, height, overflow: 'hidden' }}>
+        <div style={{
+          width: `${Math.min(100, Math.max(0, value))}%`, height: '100%',
+          background: color, borderRadius: height,
+          boxShadow: `0 0 8px ${color}60`,
+          transition: 'width 0.6s ease',
+        }} />
+      </div>
+    </div>
+  )
 }
 
 export default function SeeMode({ data, policyName }: Props) {
@@ -41,7 +64,7 @@ export default function SeeMode({ data, policyName }: Props) {
 
       {subTab === 'risk'       && <RiskGrid risks={rr.clause_risks} />}
       {subTab === 'gdpr'       && <GdprRadar dims={gdprDims} scores={radarScores} policyName={policyName} />}
-      {subTab === 'compliance' && <ComplianceView compliance={compliance} />}
+      {subTab === 'compliance' && <ComplianceView compliance={compliance} Bar={Bar} />}
       {subTab === 'sankey'     && <DataFlowDiagram data={data} />}
     </div>
   )
@@ -67,7 +90,6 @@ const EMOJI_LABELS: Record<string, string> = {
 function RiskGrid({ risks }: { risks: ClauseRisk[] }) {
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  // Deduplicate: keep highest score per category (max 12 boxes)
   const seen = new Map<string, ClauseRisk>()
   risks.forEach(r => {
     const existing = seen.get(r.category)
@@ -88,9 +110,7 @@ function RiskGrid({ risks }: { risks: ClauseRisk[] }) {
             onClick={() => setExpanded(expanded === r.category ? null : r.category)}
             style={{
               background: scoreColor(r.final_score),
-              borderRadius: 10,
-              padding: '14px 16px',
-              cursor: 'pointer',
+              borderRadius: 10, padding: '14px 16px', cursor: 'pointer',
               outline: expanded === r.category ? '2px solid rgba(255,255,255,0.6)' : 'none',
               outlineOffset: 2,
             }}
@@ -159,36 +179,21 @@ function GdprRadar({ dims, scores, policyName }: { dims: string[]; scores: numbe
         GDPR compliance across 8 dimensions — <span style={{ color: '#F1F5F9' }}>{policyName}</span>
       </div>
       <svg viewBox="0 0 520 440" style={{ width: '100%', maxWidth: 560 }}>
-        {/* Grid rings */}
         {gridLevels.map(pct => (
-          <polygon key={pct}
-            points={poly(dims.map((_, i) => pt(i, pct)))}
-            fill="none" stroke="#1E2D45" strokeWidth="1"
-          />
+          <polygon key={pct} points={poly(dims.map((_, i) => pt(i, pct)))} fill="none" stroke="#1E2D45" strokeWidth="1" />
         ))}
-        {/* Grid ring labels */}
         {gridLevels.map(pct => (
-          <text key={`lbl-${pct}`}
-            x={CX + 4} y={CY - (pct / 100) * R - 3}
-            fontSize="9" fill="#475569"
-          >{pct}</text>
+          <text key={`lbl-${pct}`} x={CX + 4} y={CY - (pct / 100) * R - 3} fontSize="9" fill="#475569">{pct}</text>
         ))}
-        {/* Axes */}
         {dims.map((_, i) => {
           const outer = pt(i, 100)
           return <line key={i} x1={CX} y1={CY} x2={outer.x} y2={outer.y} stroke="#1E2D45" strokeWidth="1" />
         })}
-        {/* Ideal polygon */}
-        <polygon points={poly(idealPts)}
-          fill="rgba(124,58,237,0.06)" stroke="#7C3AED" strokeWidth="1.5" strokeDasharray="4 3" />
-        {/* Actual polygon */}
-        <polygon points={poly(actualPts)}
-          fill="rgba(0,212,255,0.12)" stroke="#00D4FF" strokeWidth="2" />
-        {/* Score dots */}
+        <polygon points={poly(idealPts)} fill="rgba(124,58,237,0.06)" stroke="#7C3AED" strokeWidth="1.5" strokeDasharray="4 3" />
+        <polygon points={poly(actualPts)} fill="rgba(0,212,255,0.12)" stroke="#00D4FF" strokeWidth="2" />
         {actualPts.map((p, i) => (
           <circle key={i} cx={p.x} cy={p.y} r="4" fill="#00D4FF" stroke="#111827" strokeWidth="1.5" />
         ))}
-        {/* Labels */}
         {dims.map((dim, i) => {
           const lp = outerPt(i)
           const shortLabel = dim.replace(/\s*\(.*\)/, '')
@@ -203,7 +208,6 @@ function GdprRadar({ dims, scores, policyName }: { dims: string[]; scores: numbe
             </g>
           )
         })}
-        {/* Legend */}
         <rect x="10" y="422" width="10" height="10" fill="rgba(0,212,255,0.12)" stroke="#00D4FF" strokeWidth="1.5" rx="2" />
         <text x="25" y="431" fontSize="10" fill="#94A3B8">This Policy</text>
         <rect x="120" y="422" width="10" height="10" fill="rgba(124,58,237,0.06)" stroke="#7C3AED" strokeWidth="1.5" strokeDasharray="4 3" rx="2" />
@@ -244,7 +248,7 @@ function gapLabel(article: string, requirement: string): string {
   return GAP_EXPLANATIONS[article] ?? requirement
 }
 
-function ComplianceView({ compliance }: { compliance: AnalyseResponse['compliance'] }) {
+function ComplianceView({ compliance, Bar }: { compliance: AnalyseResponse['compliance']; Bar: React.ComponentType<{ value: number; color?: string; height?: number; label?: string }> }) {
   const euAiScore = compliance.eu_ai_act_score ?? 0
   return (
     <div>
@@ -255,7 +259,7 @@ function ComplianceView({ compliance }: { compliance: AnalyseResponse['complianc
           { label: 'DPDP (India)',      score: compliance.dpdp_score  },
         ]).map(c => (
           <div key={c.label} style={{ flex: '1 1 180px' }}>
-            <ProgressBar
+            <Bar
               value={c.score}
               color={c.score >= 75 ? '#10B981' : c.score >= 50 ? '#F59E0B' : '#EF4444'}
               height={12}
@@ -272,11 +276,10 @@ function ComplianceView({ compliance }: { compliance: AnalyseResponse['complianc
           <span style={{ fontSize: 13, fontWeight: 700, color: '#C4B5FD' }}>EU AI Act Art.50 (Transparency)</span>
           <span style={{ fontSize: 11, color: '#7C3AED', fontStyle: 'italic' }}>Enforcement begins Aug 2, 2026</span>
         </div>
-        <ProgressBar
+        <Bar
           value={euAiScore}
           color={euAiScore >= 75 ? '#10B981' : euAiScore >= 50 ? '#F59E0B' : '#EF4444'}
           height={10}
-          label=""
         />
         {compliance.eu_ai_act_gaps && compliance.eu_ai_act_gaps.length > 0 && (
           <div style={{ marginTop: 10 }}>
@@ -303,9 +306,8 @@ function ComplianceView({ compliance }: { compliance: AnalyseResponse['complianc
   )
 }
 
-// ── Data Flow Diagram (CSS grid, always 3 columns) ───────────────────────────
+// ── Data Flow Diagram ─────────────────────────────────────────────────────────
 
-// Maps each clause category to a specific (collected → purpose → recipient) flow
 const _FLOW_DATA: Record<string, { collected: string; purpose: string; recipient: string }> = {
   data_collection:       { collected: 'Personal Data',       purpose: 'Service Operation', recipient: 'The Company'       },
   cookies_tracking:      { collected: 'Cookies & Tracking',  purpose: 'Analytics & Ads',   recipient: 'Advertisers'       },
@@ -332,7 +334,6 @@ function DataFlowDiagram({ data }: { data: AnalyseResponse }) {
   const riskMap: Record<string, string> = {}
   data.risk_report.clause_risks.forEach(cr => { riskMap[cr.category] = cr.risk_level })
 
-  // Build flows from actual clause data; fall back to defaults if too few
   const flows = (() => {
     const seen = new Set<string>()
     const result: Array<{ collected: string; purpose: string; recipient: string; risk: string }> = []
@@ -352,8 +353,6 @@ function DataFlowDiagram({ data }: { data: AnalyseResponse }) {
       <div style={{ fontSize: 12, color: '#475569', marginBottom: 14 }}>
         How data moves through this policy — each row is one data flow, coloured by risk level
       </div>
-
-      {/* Column headers */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 40px 1fr 40px 1fr', marginBottom: 12 }}>
         {(['WHAT IS COLLECTED', '', 'HOW IT IS USED', '', 'WHO SEES IT'] as string[]).map((h, i) => (
           <div key={i} style={{
@@ -363,17 +362,10 @@ function DataFlowDiagram({ data }: { data: AnalyseResponse }) {
           }}>{h}</div>
         ))}
       </div>
-
-      {/* One row per flow */}
       {flows.map((flow, idx) => {
         const col = (RISK_COLORS as Record<string, string>)[flow.risk] ?? '#475569'
         return (
-          <div key={idx} style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 40px 1fr 40px 1fr',
-            alignItems: 'center',
-            marginBottom: 10,
-          }}>
+          <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 40px 1fr 40px 1fr', alignItems: 'center', marginBottom: 10 }}>
             <div style={{ border: `2px solid ${col}`, borderRadius: 8, padding: '10px 14px', background: `${col}15` }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#F1F5F9' }}>{flow.collected}</div>
               <div style={{ fontSize: 10, color: col, textTransform: 'uppercase', marginTop: 2 }}>{flow.risk}</div>
@@ -389,7 +381,6 @@ function DataFlowDiagram({ data }: { data: AnalyseResponse }) {
           </div>
         )
       })}
-
       <div style={{ display: 'flex', gap: 16, marginTop: 14, flexWrap: 'wrap' }}>
         {([['#10B981','Low'],['#F59E0B','Medium'],['#F97316','High'],['#EF4444','Critical']] as [string,string][]).map(([c, l]) => (
           <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#94A3B8' }}>

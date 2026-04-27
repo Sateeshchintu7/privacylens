@@ -95,12 +95,17 @@ def call_gemini(
         thinking_config=types.ThinkingConfig(thinking_budget=0),
     )
 
+    # If primary model (e.g. gemini-2.0-flash-lite) is unavailable,
+    # fall back to gemini-2.5-flash automatically.
+    _FALLBACK_MODEL = "gemini-2.5-flash"
+    active_model = GEMINI_MODEL
+
     t0 = time.monotonic()
     last_err = None
     for attempt in range(3):
         try:
             resp = client.models.generate_content(
-                model=GEMINI_MODEL,
+                model=active_model,
                 contents=prompt,
                 config=gen_config,
             )
@@ -120,6 +125,13 @@ def call_gemini(
         except Exception as exc:
             last_err = exc
             logger.warning("Gemini attempt %d failed: %s", attempt + 1, exc)
+            # If primary model not found, switch to fallback immediately
+            err_str = str(exc).lower()
+            if active_model != _FALLBACK_MODEL and any(
+                k in err_str for k in ("not found", "invalid", "unsupported", "does not exist")
+            ):
+                logger.warning("Model %s unavailable — switching to %s", active_model, _FALLBACK_MODEL)
+                active_model = _FALLBACK_MODEL
             if attempt < 2:
                 # Extract retry delay from 429 errors when available
                 err_str = str(exc)
