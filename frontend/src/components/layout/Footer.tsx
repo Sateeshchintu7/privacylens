@@ -5,7 +5,7 @@ export default function Footer() {
       padding: '20px 24px', textAlign: 'center',
       fontSize: 13, color: '#475569',
     }}>
-      PrivacyLens · MSc Dissertation · Shravan Kumar Payyavula · {new Date().getFullYear()}
+      PrivacyLens · MSc Dissertation · Sateesh Kumar Payyavula · {new Date().getFullYear()}
     </footer>
   )
 }

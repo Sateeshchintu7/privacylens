@@ -89,15 +89,20 @@ def call_gemini(
     # Remove any system GOOGLE_API_KEY so SDK uses our explicit key only
     _os.environ.pop("GOOGLE_API_KEY", None)
     client = genai.Client(api_key=GEMINI_API_KEY)
-    gen_config = types.GenerateContentConfig(
-        temperature=GEMINI_TEMPERATURE,
-        max_output_tokens=GEMINI_MAX_TOKENS,
-        thinking_config=types.ThinkingConfig(thinking_budget=0),
-    )
 
     # If primary model (gemini-2.5-pro) is unavailable, fall back to flash.
     _FALLBACK_MODEL = "gemini-2.5-flash"
     active_model = GEMINI_MODEL
+
+    def _make_config(model: str) -> types.GenerateContentConfig:
+        # 2.5-pro requires thinking_budget > 0 (thinking-only model).
+        # 2.5-flash and older models accept budget=0 (thinking optional).
+        budget = 8192 if "2.5-pro" in model else 0
+        return types.GenerateContentConfig(
+            temperature=GEMINI_TEMPERATURE,
+            max_output_tokens=GEMINI_MAX_TOKENS,
+            thinking_config=types.ThinkingConfig(thinking_budget=budget),
+        )
 
     t0 = time.monotonic()
     last_err = None
@@ -106,7 +111,7 @@ def call_gemini(
             resp = client.models.generate_content(
                 model=active_model,
                 contents=prompt,
-                config=gen_config,
+                config=_make_config(active_model),
             )
             text = resp.text
             if not text:

@@ -141,20 +141,37 @@ export default function DocumentInput({ onSubmit, loading }: Props) {
             <div
               onClick={() => fileRef.current?.click()}
               style={{
-                border: '2px dashed #1E2D45', borderRadius: 8, padding: '32px 20px',
-                textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.2s',
+                border: `2px dashed ${pdfB64 ? '#10B981' : '#1E2D45'}`,
+                borderRadius: 12, padding: '40px 24px',
+                textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.2s, background 0.2s',
+                background: pdfB64 ? 'rgba(16,185,129,0.05)' : 'transparent',
               }}
-              onMouseOver={e => (e.currentTarget.style.borderColor = '#00D4FF')}
-              onMouseOut={e => (e.currentTarget.style.borderColor = '#1E2D45')}
+              onMouseOver={e => { if (!pdfB64) e.currentTarget.style.borderColor = '#00D4FF' }}
+              onMouseOut={e => { if (!pdfB64) e.currentTarget.style.borderColor = '#1E2D45' }}
             >
-              <Upload size={28} color="#475569" style={{ marginBottom: 8 }} />
-              <div style={{ color: '#94A3B8', fontSize: 14 }}>
-                {pdfName || 'Click to upload PDF (max 10 MB)'}
-              </div>
-              {pdfB64 && <div style={{ color: '#10B981', fontSize: 12, marginTop: 4 }}>✓ {pdfName}</div>}
+              {pdfB64 ? (
+                <>
+                  <div style={{ fontSize: 36, marginBottom: 8 }}>✅</div>
+                  <div style={{ color: '#10B981', fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{pdfName}</div>
+                  <div style={{ color: '#475569', fontSize: 12 }}>Click to replace</div>
+                </>
+              ) : (
+                <>
+                  <Upload size={48} color="#475569" style={{ marginBottom: 12, display: 'block', margin: '0 auto 12px' }} />
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#F1F5F9', marginBottom: 6 }}>
+                    Drop your privacy policy PDF here
+                  </div>
+                  <div style={{ fontSize: 14, color: '#94A3B8', marginBottom: 8 }}>
+                    or click to browse — max 10 MB
+                  </div>
+                  <div style={{ fontSize: 12, color: '#475569' }}>
+                    Supports any privacy policy, terms of service, or cookie notice
+                  </div>
+                </>
+              )}
             </div>
             <input ref={fileRef} type="file" accept="application/pdf" onChange={handleFile} style={{ display: 'none' }} />
-            {pdfError && <div style={{ color: '#EF4444', fontSize: 13, marginTop: 6 }}>{pdfError}</div>}
+            {pdfError && <div style={{ color: '#EF4444', fontSize: 13, marginTop: 8 }}>{pdfError}</div>}
           </div>
         )}
 
@@ -190,15 +207,27 @@ export default function DocumentInput({ onSubmit, loading }: Props) {
               disabled={!canSubmit || loading}
               style={{
                 width: '100%', padding: '11px 20px', borderRadius: 8,
-                background: canSubmit && !loading ? '#00D4FF' : '#1A2236',
-                color: canSubmit && !loading ? '#0A0E1A' : '#475569',
-                border: 'none', cursor: canSubmit && !loading ? 'pointer' : 'not-allowed',
+                background: loading ? '#0e7fa3' : canSubmit ? '#00D4FF' : '#1A2236',
+                color: canSubmit || loading ? '#0A0E1A' : '#475569',
+                border: 'none',
+                cursor: loading ? 'wait' : canSubmit ? 'pointer' : 'not-allowed',
                 fontSize: 15, fontWeight: 700,
+                opacity: !canSubmit && !loading ? 0.6 : 1,
                 boxShadow: canSubmit && !loading ? '0 0 20px rgba(0,212,255,0.3)' : 'none',
                 transition: 'all 0.2s',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               }}
             >
-              {loading ? 'Analysing...' : '🔍 Analyse Privacy Policy'}
+              {loading ? (
+                <>
+                  <span style={{
+                    width: 14, height: 14, border: '2px solid rgba(10,14,26,0.3)',
+                    borderTop: '2px solid #0A0E1A', borderRadius: '50%',
+                    animation: 'spin 0.8s linear infinite', display: 'inline-block', flexShrink: 0,
+                  }} />
+                  Analysing…
+                </>
+              ) : '🔍 Analyse Privacy Policy'}
             </button>
           </div>
         </div>

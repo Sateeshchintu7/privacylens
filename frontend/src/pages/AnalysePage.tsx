@@ -116,8 +116,8 @@ export default function AnalysePage() {
   })
 
   return (
-    <div style={{ background: '#0A0E1A', minHeight: '100vh', paddingTop: 80 }} className="grid-bg">
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
+    <div style={{ background: '#0A0E1A', minHeight: '100vh', paddingTop: 80, overflowX: 'hidden' }} className="grid-bg">
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px', width: '100%', boxSizing: 'border-box' }}>
 
         {/* Header */}
         <div style={{ marginBottom: 28 }}>
@@ -223,19 +223,22 @@ export default function AnalysePage() {
 
             {/* Mode tabs */}
             <div style={{ position: 'sticky', top: 64, zIndex: 30, background: 'rgba(10,14,26,0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid #1E2D45', marginBottom: 24 }}>
-              <div style={{ display: 'flex', overflowX: 'auto', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any, scrollbarWidth: 'none' as any }}>
                 {TABS.map(t => (
                   <button key={t.id} style={tabStyle(t.id)} onClick={() => setActiveTab(t.id)}>
                     {t.icon} {t.label}
                   </button>
                 ))}
-                <div style={{ marginLeft: 'auto', paddingRight: 8, flexShrink: 0 }}>
+                </div>
+                <div style={{ paddingRight: 8, flexShrink: 0 }}>
                   <select
                     value={selectedLanguage}
                     onChange={e => setSelectedLanguage(e.target.value)}
                     style={{
                       padding: '6px 10px', background: '#1A2236', border: '1px solid #1E2D45',
                       borderRadius: 8, color: '#F1F5F9', fontSize: 12, cursor: 'pointer',
+                      outline: 'none',
                     }}
                   >
                     <option value="en">🌐 English</option>

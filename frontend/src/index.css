@@ -87,6 +87,11 @@ html, body {
 }
 .pulse-in { animation: pulse-once 0.5s ease-out forwards; }
 
+/* Spinner (used by button loading state) */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Fade up */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(16px); }

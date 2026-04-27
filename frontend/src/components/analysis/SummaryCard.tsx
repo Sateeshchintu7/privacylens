@@ -134,17 +134,17 @@ export default function SummaryCard({ data, contradictions, contradictionsLoadin
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 24, alignItems: 'start' }}>
         {/* Grade badge */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, minWidth: 120 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
           <GradeBadge grade={rr.grade} score={rr.overall_score} />
-          <div style={{ fontSize: 12, color: '#94A3B8', textAlign: 'center', maxWidth: 120 }}>
+          <div style={{ fontSize: 12, color: '#94A3B8', textAlign: 'center', maxWidth: 140 }}>
             {rr.grade_explanation}
           </div>
         </div>
 
         {/* Centre metrics */}
-        <div style={{ flex: 1, minWidth: 220 }}>
+        <div style={{ minWidth: 0 }}>
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 13, color: '#94A3B8', marginBottom: 4 }}>Readability</div>
             <div
@@ -215,7 +215,7 @@ export default function SummaryCard({ data, contradictions, contradictionsLoadin
         </div>
 
         {/* Flags */}
-        <div style={{ minWidth: 220, flex: 1 }}>
+        <div style={{ minWidth: 0 }}>
           {rr.top_red_flags.slice(0, 3).map((f, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, fontSize: 13, color: '#EF4444', alignItems: 'flex-start' }}>
               <span style={{ flexShrink: 0 }}>🚨</span>
