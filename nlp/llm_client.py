@@ -95,8 +95,7 @@ def call_gemini(
         thinking_config=types.ThinkingConfig(thinking_budget=0),
     )
 
-    # If primary model (e.g. gemini-2.0-flash-lite) is unavailable,
-    # fall back to gemini-2.5-flash automatically.
+    # If primary model (gemini-2.5-pro) is unavailable, fall back to flash.
     _FALLBACK_MODEL = "gemini-2.5-flash"
     active_model = GEMINI_MODEL
 
