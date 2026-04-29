@@ -153,30 +153,12 @@ def _generate_report(request: dict) -> dict:
     if lang_instruction:
         full_prompt = lang_instruction + full_prompt
 
-    # Call Gemini using existing llm_client infrastructure
-    from config import GEMINI_API_KEY, GEMINI_MODEL
-    from google import genai
-    from google.genai import types
+    # Call via llm_client — handles model-aware thinking_budget + 3-tier fallback
+    from nlp.llm_client import call_gemini
 
-    if not GEMINI_API_KEY:
-        raise Exception("GEMINI_API_KEY not set")
-
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    gen_config = types.GenerateContentConfig(
-        temperature=0.1,
-        max_output_tokens=8192,
-        thinking_config=types.ThinkingConfig(thinking_budget=0),
-    )
-
-    resp = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=full_prompt,
-        config=gen_config,
-    )
-
-    raw = resp.text
+    raw, _ = call_gemini(full_prompt, function_name="report_generator", use_cache=False)
     if not raw:
-        raise Exception("Gemini returned empty response")
+        raise Exception("LLM returned empty response")
 
     report = _parse_report(raw)
     report["policy_name"] = policy_name
