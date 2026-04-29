@@ -19,6 +19,7 @@ load_dotenv(BASE_DIR / ".env")
 
 # ── API Keys ─────────────────────────────────────────────────────────────────
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY", "")
 GOOGLE_TRANSLATE_API_KEY: str = os.getenv("GOOGLE_TRANSLATE_API_KEY", "")
 

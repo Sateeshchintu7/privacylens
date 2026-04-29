@@ -3,7 +3,7 @@ nlp/llm_client.py — Shared Gemini LLM client for PrivacyLens.
 
 Provides a single call_gemini() entry point with:
   - File-based caching (keyed on MD5 of prompt text)
-  - One automatic retry with 2-second backoff
+  - 3-tier fallback: Gemini Pro → Gemini Flash → OpenRouter (llama-3.3-70b)
   - Structured JSONL logging of every API call
   - Robust JSON response parsing (handles markdown blocks)
 
@@ -45,6 +45,57 @@ def _log(fn: str, ti: int, to: int, ms: int, cached: bool) -> None:
         pass  # Non-fatal — logging failure must never break the pipeline
 
 
+# ── OpenRouter fallback ───────────────────────────────────────────────────────
+
+def call_openrouter(
+    messages: list[dict],
+    function_name: str = "unknown",
+) -> tuple[str, bool]:
+    """
+    Call OpenRouter API (llama-3.3-70b-instruct:free) as final LLM fallback.
+
+    Args:
+        messages: List of {"role": ..., "content": ...} dicts (OpenAI format)
+        function_name: Label for the log entry
+
+    Returns:
+        tuple: (response_text, was_cached=False)
+    """
+    import os as _os
+    import urllib.request as _urllib
+
+    api_key = _os.getenv("OPENROUTER_API_KEY", "")
+    if not api_key:
+        raise RuntimeError(
+            "OPENROUTER_API_KEY not set — cannot use OpenRouter fallback. "
+            "Add OPENROUTER_API_KEY=your_key to your .env file."
+        )
+
+    payload = json.dumps({
+        "model": "meta-llama/llama-3.3-70b-instruct:free",
+        "messages": messages,
+    }).encode()
+
+    req = _urllib.Request(
+        "https://openrouter.ai/api/v1/chat/completions",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    t0 = time.monotonic()
+    with _urllib.urlopen(req, timeout=120) as resp:
+        data = json.loads(resp.read())
+
+    text = data["choices"][0]["message"]["content"]
+    ms = int((time.monotonic() - t0) * 1000)
+    _log(function_name, 0, len(text) // 4, ms, cached=False)
+    return text, False
+
+
 # ── Public API call ───────────────────────────────────────────────────────────
 
 def call_gemini(
@@ -53,7 +104,12 @@ def call_gemini(
     use_cache: bool = True,
 ) -> tuple[str, bool]:
     """
-    Call the Gemini API with caching, retry, and logging.
+    Call the Gemini API with caching, retry, and a 3-tier fallback chain.
+
+    Fallback order:
+        1. gemini-2.5-pro   (primary)
+        2. gemini-2.5-flash (immediate switch on quota/model errors, no sleep)
+        3. OpenRouter llama-3.3-70b (final fallback if all Gemini attempts fail)
 
     Args:
         prompt: Full prompt string to send to the model
@@ -90,7 +146,6 @@ def call_gemini(
     _os.environ.pop("GOOGLE_API_KEY", None)
     client = genai.Client(api_key=GEMINI_API_KEY)
 
-    # If primary model (gemini-2.5-pro) is unavailable, fall back to flash.
     _FALLBACK_MODEL = "gemini-2.5-flash"
     active_model = GEMINI_MODEL
 
@@ -104,6 +159,7 @@ def call_gemini(
             thinking_config=types.ThinkingConfig(thinking_budget=budget),
         )
 
+    logger.info("Using Gemini Pro (%s)", active_model)
     t0 = time.monotonic()
     last_err = None
     for attempt in range(3):
@@ -137,7 +193,7 @@ def call_gemini(
                     "resource_exhausted", "429",
                 )
             ):
-                logger.warning("Model %s unavailable/quota — switching to %s", active_model, _FALLBACK_MODEL)
+                logger.warning("Falling back to Gemini Flash (%s)", _FALLBACK_MODEL)
                 active_model = _FALLBACK_MODEL
                 continue  # retry immediately with fallback, no sleep
             if attempt < 2:
@@ -154,10 +210,31 @@ def call_gemini(
                 logger.info("Retrying in %ds...", wait)
                 time.sleep(wait)
 
-    raise RuntimeError(
-        f"Gemini API failed after 3 attempts: {last_err}. "
-        "Check your API key and internet connection."
-    )
+    # ── Gemini exhausted — try OpenRouter ─────────────────────────────────────
+    if not _os.getenv("OPENROUTER_API_KEY", ""):
+        logger.warning("OPENROUTER_API_KEY not set — no OpenRouter fallback available")
+        raise RuntimeError(
+            f"Gemini API failed after 3 attempts: {last_err}. "
+            "Check your API key and internet connection."
+        )
+
+    logger.warning("Falling back to OpenRouter (llama-3.3-70b)")
+    try:
+        text, _ = call_openrouter(
+            [{"role": "user", "content": prompt}],
+            function_name=function_name,
+        )
+    except Exception as or_err:
+        raise RuntimeError(
+            f"All LLM backends failed. Gemini: {last_err}. OpenRouter: {or_err}"
+        ) from or_err
+
+    if use_cache:
+        ti, to = len(prompt) // 4, len(text) // 4
+        cache_file.write_text(
+            json.dumps({"r": text, "ti": ti, "to": to}), encoding="utf-8"
+        )
+    return text, False
 
 
 # ── JSON parsing ──────────────────────────────────────────────────────────────
