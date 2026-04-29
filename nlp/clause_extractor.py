@@ -12,8 +12,7 @@ positive_signals, plain_summary, and what_it_means — eliminating separate MAD
 and plain rewriter passes for most clauses.
 
 Author: Sateesh Kumar Payyavula
-Reference: Wilson et al. (2016) OPP-115 -- 12-category taxonomy
-           Adhikari, Das & Dewri (2025, arXiv:2501.10319) -- NLP pipeline
+Reference: Xie et al. (2025) LLM-PP2025 -- 18-category taxonomy (extended from OPP-115)
 """
 
 import hashlib
@@ -36,18 +35,24 @@ logger = logging.getLogger(__name__)
 # ── Taxonomy metadata ─────────────────────────────────────────────────────────
 
 GDPR_ARTICLES: dict[str, str] = {
-    "data_collection":      "Art. 13, 14",
-    "purpose_limitation":   "Art. 5(1)(b)",
-    "retention_period":     "Art. 5(1)(e)",
-    "third_party_sharing":  "Art. 13(1)(e), 28",
-    "user_rights":          "Art. 15-22",
-    "consent_mechanism":    "Art. 7",
-    "data_security":        "Art. 32",
-    "breach_notification":  "Art. 33, 34",
-    "children_data":        "Art. 8; COPPA",
-    "cross_border_transfer":"Art. 44-49",
-    "cookies_tracking":     "ePrivacy Directive",
-    "contact_info":         "Art. 13(1)(a)",
+    "data_collection":          "Art. 13, 14",
+    "purpose_limitation":       "Art. 5(1)(b)",
+    "retention_period":         "Art. 5(1)(e)",
+    "third_party_sharing":      "Art. 13(1)(e), 28",
+    "user_rights":              "Art. 15-22",
+    "consent_mechanism":        "Art. 7",
+    "data_security":            "Art. 32",
+    "breach_notification":      "Art. 33, 34",
+    "children_data":            "Art. 8; COPPA",
+    "cross_border_transfer":    "Art. 44-49",
+    "cookies_tracking":         "ePrivacy Directive",
+    "contact_info":             "Art. 13(1)(a)",
+    "automated_decision_making":"Art. 22; EU AI Act",
+    "data_sale_vs_sharing":     "CCPA",
+    "biometric_data":           "GDPR; BIPA",
+    "gpc_signal_honoring":      "12 US States (2026)",
+    "ai_system_disclosure":     "EU AI Act Art.50",
+    "sensitive_data_categories":"Art. 9",
 }
 
 RISK_WEIGHTS: dict[str, float] = {
@@ -57,6 +62,9 @@ RISK_WEIGHTS: dict[str, float] = {
     "data_security": 1.4, "breach_notification": 1.2,
     "children_data": 2.0, "cross_border_transfer": 1.5,
     "cookies_tracking": 1.1, "contact_info": 1.2,
+    "automated_decision_making": 1.6, "data_sale_vs_sharing": 1.7,
+    "biometric_data": 2.2, "gpc_signal_honoring": 0.8,
+    "ai_system_disclosure": 1.0, "sensitive_data_categories": 1.9,
 }
 
 VALID_CATEGORIES = set(GDPR_ARTICLES.keys())
@@ -162,6 +170,38 @@ _CATEGORY_KEYWORDS: dict[str, list[str]] = {
         "data protection officer", "privacy team", "questions about",
         "complaints", "how to contact", "contact details",
     ],
+    "automated_decision_making": [
+        "automated decision", "algorithm", "profiling", "ai", "machine learning",
+        "decision making", "based on automated", "solely automated",
+        "human intervention", "right to human", "explain decision",
+        "art. 22", "eu ai act",
+    ],
+    "data_sale_vs_sharing": [
+        "sell", "sale", "selling", "share for advertising", "cross-context",
+        "behavioral advertising", "interest-based", "targeted advertising",
+        "ccpa", "do not sell", "opt-out of sale", "opt-out of sharing",
+    ],
+    "biometric_data": [
+        "biometric", "facial recognition", "fingerprint", "voiceprint",
+        "iris scan", "retina", "dna", "physiological", "behavioral biometric",
+        "bipa", "california biometric",
+    ],
+    "gpc_signal_honoring": [
+        "global privacy control", "gpc", "opt-out preference signal",
+        "universal opt-out", "do not sell", "do not share", "12 states",
+    ],
+    "ai_system_disclosure": [
+        "ai system", "artificial intelligence", "chatbot", "virtual assistant",
+        "emotion recognition", "biometric categorization", "deepfake",
+        "synthetic content", "eu ai act art. 50",
+    ],
+    "sensitive_data_categories": [
+        "sensitive data", "special categories", "racial origin", "ethnic origin",
+        "political opinions", "religious beliefs", "philosophical beliefs",
+        "trade union membership", "genetic data", "biometric data",
+        "health data", "sex life", "sexual orientation", "criminal convictions",
+        "art. 9",
+    ],
 }
 
 
@@ -170,7 +210,7 @@ _CATEGORY_KEYWORDS: dict[str, list[str]] = {
 class ClauseResult(BaseModel):
     """A single classified clause from a privacy policy."""
     clause_id: str           # UUID
-    category: str            # one of the 12 OPP-115 categories
+    category: str            # one of the 18 LLM-PP2025 categories
     original_text: str       # exact text from the policy
     confidence: float        # 0.0 – 1.0
     gdpr_article: str        # e.g. "Art. 13"
@@ -461,24 +501,57 @@ def _gemini_simple(policy_text: str) -> list[ClauseResult]:
         return []
 
 
-_DEFAULT_EXTRACTION_PROMPT = """You are a privacy policy analyst. Extract and classify relevant clauses from the provided policy text chunk into one of 12 standardised categories, based on the OPP-115 taxonomy (Wilson et al., 2016).
+_DEFAULT_EXTRACTION_PROMPT = """You are a privacy policy analyst. Extract and classify relevant clauses from the provided policy text chunk into one of 18 standardised categories, based on the LLM-PP2025 taxonomy (Xie et al., 2025).
 
 CATEGORIES (use EXACTLY these snake_case IDs):
-1.  data_collection       - What personal data is collected
-2.  purpose_limitation    - Why data is collected; stated purposes
-3.  retention_period      - How long data is stored
-4.  third_party_sharing   - Whether and how data is shared with third parties
-5.  user_rights           - Rights to access, correct, delete personal data
-6.  consent_mechanism     - How user consent is obtained or managed
-7.  data_security         - Technical measures to protect personal data
-8.  breach_notification   - How users are notified of data breaches
-9.  children_data         - Special rules for users under 13 or 18
-10. cross_border_transfer - Transfer of data to other countries
-11. cookies_tracking      - Use of cookies, pixels, tracking technologies
-12. contact_info          - How to contact the company with privacy questions
+1.  data_collection          - Personal data collected: name, email, location, device info, browsing history, etc.
+2.  purpose_limitation       - Why data is collected; stated purposes and legal basis for processing
+3.  retention_period         - How long data is stored; deletion schedules; retention criteria
+4.  third_party_sharing      - Whether and how data is shared with third parties, partners, advertisers, or affiliates
+5.  user_rights              - Rights to access, correct, delete, restrict, or port personal data (GDPR Art. 15-22)
+6.  consent_mechanism        - How user consent is obtained, withdrawn, or managed (opt-in, opt-out, continued use)
+7.  data_security            - Technical and organisational measures to protect personal data (encryption, access controls)
+8.  breach_notification      - How and when users are notified of data breaches or security incidents
+9.  children_data            - Special rules or restrictions for users under 13 or under 18 (COPPA / GDPR Art. 8)
+10. cross_border_transfer    - Transfer of personal data to other countries or international servers
+11. cookies_tracking         - Use of cookies, pixels, web beacons, device fingerprinting, or tracking technologies
+12. contact_info             - How to contact the company with privacy questions, rights requests, or complaints
+13. automated_decision_making- AI profiling and automated decisions (GDPR Art. 22, EU AI Act)
+14. data_sale_vs_sharing     - Legal distinction between selling and sharing data for advertising (CCPA)
+15. biometric_data           - Facial recognition, fingerprints, voiceprints, biometric identifiers (GDPR, BIPA)
+16. gpc_signal_honoring      - Whether Global Privacy Control signals are honoured (12 US States 2026)
+17. ai_system_disclosure     - Disclosure of AI system usage (EU AI Act Article 50)
+18. sensitive_data_categories- Special categories: race, health, political views, sexual orientation (GDPR Art. 9)
 
-Return ONLY valid JSON. No markdown fences, no explanations, no preamble.
-OUTPUT FORMAT: {"clauses": [{"category": "<category_id>", "text": "<exact text>", "confidence": <0.0-1.0>, "gdpr_article": "<article>", "plain_summary": "<Grade 6 rewrite>", "what_it_means": "This means...", "risk_level": "<low|medium|high|critical>", "risk_score": <0-100>, "red_flags": [], "positive_signals": []}]}
+INSTRUCTIONS:
+- Extract ONLY sentences or paragraphs that clearly belong to one of the 18 categories above.
+- Copy the EXACT text from the document - do NOT paraphrase or summarise.
+- Assign a confidence score (0.0-1.0):
+    0.9-1.0 = clearly and unambiguously fits the category
+    0.7-0.8 = likely fits, minor ambiguity present
+    0.5-0.6 = possible fit, significant ambiguity
+    Below 0.5 = do NOT include
+- Assign the most relevant GDPR article or regulation.
+- A single text segment may only be assigned ONE category -- choose the best fit.
+- For EACH clause, also provide:
+  - plain_summary: a Grade 6 plain English rewrite (max 80 words, active voice, short sentences)
+  - what_it_means: one sentence starting with "This means..." explaining the real-world impact
+  - risk_level: one of "low", "medium", "high", "critical"
+  - risk_score: integer 0-100 (0=harmless, 100=extremely harmful)
+  - red_flags: array of short plain-English concerns (empty array if low risk)
+  - positive_signals: array of good practices found (empty array if none)
+- Skip text that does not fit any category (navigation, headings, footers).
+- Return ONLY valid JSON. No markdown fences, no explanations, no preamble.
+
+RISK SCORING GUIDE:
+0-25   (low): Transparent, fair, user-friendly. Example: "We only collect your email to send receipts." -> 8
+26-50  (medium): Some concern but common practice. Example: "We use analytics to track page views." -> 35
+51-75  (high): Significant concern users would object to. Example: "We share browsing history with advertisers." -> 68
+76-100 (critical): Aggressive, harmful, or legally questionable. Example: "We sell personal data to brokers." -> 95
+
+OUTPUT FORMAT - return ONLY this JSON:
+{"clauses": [{"category": "<category_id>", "text": "<exact text from document>", "confidence": <0.0-1.0>, "gdpr_article": "<article>", "plain_summary": "<Grade 6 rewrite>", "what_it_means": "This means...", "risk_level": "<low|medium|high|critical>", "risk_score": <0-100>, "red_flags": ["<flag>"], "positive_signals": ["<signal>"]}]}
+
 If no relevant clauses are found, return: {"clauses": []}
 
 POLICY TEXT CHUNK:

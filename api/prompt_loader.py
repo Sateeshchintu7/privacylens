@@ -38,7 +38,9 @@ _FALLBACKS: dict[str, str] = {
         "data_collection, purpose_limitation, retention_period,\n"
         "third_party_sharing, user_rights, consent_mechanism,\n"
         "data_security, breach_notification, children_data,\n"
-        "cross_border_transfer, cookies_tracking, contact_info.\n\n"
+        "cross_border_transfer, cookies_tracking, contact_info,\n"
+        "automated_decision_making, data_sale_vs_sharing, biometric_data,\n"
+        "gpc_signal_honoring, ai_system_disclosure, sensitive_data_categories.\n\n"
         "For each clause also provide a short Grade 6 plain-English summary, a one-sentence 'This means...' explanation, a risk level, a risk score, red flags, and positive signals.\n\n"
         "Return ONLY valid JSON with no markdown:\n"
         '{"clauses": [{'
