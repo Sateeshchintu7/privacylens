@@ -15,7 +15,7 @@ services:
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
       - key: GEMINI_TEMPERATURE
-        value: "0.3"
+        value: "0.0"
       - key: GEMINI_MAX_TOKENS
         value: "8192"
       - key: PYTHONPATH
