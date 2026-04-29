@@ -69,29 +69,43 @@ RISK_WEIGHTS: dict[str, float] = {
 
 VALID_CATEGORIES = set(GDPR_ARTICLES.keys())
 
-# Maximum clauses to process downstream — prevents runaway LLM calls
-MAX_CLAUSES = 20
+# Maximum clauses to process downstream — 2 per category at most
+MAX_CLAUSES = 36
 
-# Maximum chunks to send to Gemini — prevents hundreds of API calls on large policies
-MAX_CHUNKS_TO_PROCESS = 8
+# Maximum chunks to send to Gemini — covers more of the document
+MAX_CHUNKS_TO_PROCESS = 12
 
 # Priority order for clause cap: keep these categories first
 PRIORITY_CATEGORIES = [
     "children_data", "third_party_sharing", "data_collection",
     "user_rights", "data_security", "consent_mechanism",
+    "contact_info",  # must always be captured
     "cross_border_transfer", "retention_period", "breach_notification",
-    "cookies_tracking", "purpose_limitation", "contact_info",
+    "cookies_tracking", "purpose_limitation",
+    "automated_decision_making", "data_sale_vs_sharing", "biometric_data",
+    "sensitive_data_categories", "gpc_signal_honoring", "ai_system_disclosure",
 ]
 
 
 def _prioritize_clauses(clauses: list, max_clauses: int = MAX_CLAUSES) -> list:
-    """Keep at most `max_clauses`, prioritised by category importance."""
+    """Keep at most `max_clauses`, guaranteeing at least 1 clause per found category."""
     if len(clauses) <= max_clauses:
         return clauses
-    logger.info("Capping %d clauses to %d (priority order)", len(clauses), max_clauses)
-    priority_map = {cat: i for i, cat in enumerate(PRIORITY_CATEGORIES)}
-    clauses.sort(key=lambda c: (priority_map.get(c.category, 99), -c.confidence))
-    return clauses[:max_clauses]
+    logger.info("Capping %d clauses to %d (1 per category guaranteed)", len(clauses), max_clauses)
+    # Pass 1: keep the highest-confidence clause for each category found
+    by_cat: dict[str, "ClauseResult"] = {}
+    for c in clauses:
+        if c.category not in by_cat or c.confidence > by_cat[c.category].confidence:
+            by_cat[c.category] = c
+    kept = list(by_cat.values())
+    # Pass 2: fill remaining slots with next-best clauses by confidence
+    kept_ids = {id(c) for c in kept}
+    extras = sorted(
+        (c for c in clauses if id(c) not in kept_ids),
+        key=lambda c: -c.confidence,
+    )
+    kept += extras[: max(0, max_clauses - len(kept))]
+    return kept
 
 # ── Keyword lists for Layer 3 fallback ───────────────────────────────────────
 
@@ -232,18 +246,27 @@ class ClauseResult(BaseModel):
 # ── Chunking ──────────────────────────────────────────────────────────────────
 
 def _sample_chunks(chunks: list) -> list:
-    """Select at most MAX_CHUNKS_TO_PROCESS chunks: first 4 + 2 mid + last 2."""
+    """Select at most MAX_CHUNKS_TO_PROCESS chunks: first 4 + evenly spaced middle + last 4."""
     if len(chunks) <= MAX_CHUNKS_TO_PROCESS:
         return chunks
     n = len(chunks)
-    mid = n // 2
-    selected = chunks[:4] + chunks[mid - 1 : mid + 1] + chunks[-2:]
-    # Deduplicate (edge case: tiny policy)
-    seen, result = set(), []
-    for c in selected:
-        key = id(c)
-        if key not in seen:
-            seen.add(key)
+    # Always include start (contact/purpose) and end (contact info is often last)
+    first = chunks[:4]
+    last = chunks[-4:]
+    # Fill middle slots evenly from the interior
+    interior = chunks[4 : n - 4]
+    middle_slots = MAX_CHUNKS_TO_PROCESS - 8
+    if interior and middle_slots > 0:
+        step = max(1, len(interior) // middle_slots)
+        middle = interior[::step][:middle_slots]
+    else:
+        middle = []
+    # Merge preserving order, deduplicate by identity
+    seen: set[int] = set()
+    result: list = []
+    for c in first + middle + last:
+        if id(c) not in seen:
+            seen.add(id(c))
             result.append(c)
     logger.info("Strategic sampling: %d -> %d chunks", n, len(result))
     return result
