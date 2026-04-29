@@ -271,6 +271,14 @@ def _do_analysis(req: dict, progress_cb=None) -> dict:
     policy_text   = cleaned.text
     logger.info("Cleaned text: %d chars (was %d raw)", len(policy_text), len(raw_text))
 
+    # Cap very large policies — prevents hundreds of Gemini chunk calls
+    _MAX_POLICY_CHARS = 50_000
+    if len(policy_text) > _MAX_POLICY_CHARS:
+        head = int(_MAX_POLICY_CHARS * 0.70)
+        tail = _MAX_POLICY_CHARS - head
+        policy_text = policy_text[:head] + "\n\n" + policy_text[-tail:]
+        logger.info("Policy truncated to %d chars (was %d)", _MAX_POLICY_CHARS, len(cleaned.text))
+
     _progress(20, "Extracting clauses with AI...")
     clauses       = extract_clauses(policy_text)
     clause_count  = len(clauses)

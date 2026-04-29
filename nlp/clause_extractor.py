@@ -72,6 +72,9 @@ VALID_CATEGORIES = set(GDPR_ARTICLES.keys())
 # Maximum clauses to process downstream — prevents runaway LLM calls
 MAX_CLAUSES = 20
 
+# Maximum chunks to send to Gemini — prevents hundreds of API calls on large policies
+MAX_CHUNKS_TO_PROCESS = 8
+
 # Priority order for clause cap: keep these categories first
 PRIORITY_CATEGORIES = [
     "children_data", "third_party_sharing", "data_collection",
@@ -228,12 +231,26 @@ class ClauseResult(BaseModel):
 
 # ── Chunking ──────────────────────────────────────────────────────────────────
 
-def _chunk_text(text: str, chunk_words: int = 250, overlap: int = 25) -> list[tuple[str, int]]:
-    """
-    Split text into overlapping word chunks, tracking char offsets.
+def _sample_chunks(chunks: list) -> list:
+    """Select at most MAX_CHUNKS_TO_PROCESS chunks: first 4 + 2 mid + last 2."""
+    if len(chunks) <= MAX_CHUNKS_TO_PROCESS:
+        return chunks
+    n = len(chunks)
+    mid = n // 2
+    selected = chunks[:4] + chunks[mid - 1 : mid + 1] + chunks[-2:]
+    # Deduplicate (edge case: tiny policy)
+    seen, result = set(), []
+    for c in selected:
+        key = id(c)
+        if key not in seen:
+            seen.add(key)
+            result.append(c)
+    logger.info("Strategic sampling: %d -> %d chunks", n, len(result))
+    return result
 
-    Reduced from 400/50 to 250/25 for faster Gemini responses (~2500 chars per chunk).
-    """
+
+def _chunk_text(text: str, chunk_words: int = 400, overlap: int = 40) -> list[tuple[str, int]]:
+    """Split text into overlapping word chunks, tracking char offsets."""
     words = text.split()
     if not words:
         return []
@@ -453,7 +470,7 @@ def _gemini_extract(policy_text: str) -> list[ClauseResult]:
     except Exception:
         prompt_template = _DEFAULT_EXTRACTION_PROMPT
 
-    chunks = _chunk_text(policy_text)
+    chunks = _sample_chunks(_chunk_text(policy_text))
     if not chunks:
         return []
 
