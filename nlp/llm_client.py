@@ -129,13 +129,17 @@ def call_gemini(
         except Exception as exc:
             last_err = exc
             logger.warning("Gemini attempt %d failed: %s", attempt + 1, exc)
-            # If primary model not found, switch to fallback immediately
             err_str = str(exc).lower()
+            # Switch to fallback immediately on quota exhaustion OR model unavailability
             if active_model != _FALLBACK_MODEL and any(
-                k in err_str for k in ("not found", "invalid", "unsupported", "does not exist")
+                k in err_str for k in (
+                    "not found", "invalid", "unsupported", "does not exist",
+                    "resource_exhausted", "429",
+                )
             ):
-                logger.warning("Model %s unavailable — switching to %s", active_model, _FALLBACK_MODEL)
+                logger.warning("Model %s unavailable/quota — switching to %s", active_model, _FALLBACK_MODEL)
                 active_model = _FALLBACK_MODEL
+                continue  # retry immediately with fallback, no sleep
             if attempt < 2:
                 # Extract retry delay from 429 errors when available
                 err_str = str(exc)
