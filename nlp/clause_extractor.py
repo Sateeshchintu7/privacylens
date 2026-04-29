@@ -478,7 +478,7 @@ CATEGORIES (use EXACTLY these snake_case IDs):
 12. contact_info          - How to contact the company with privacy questions
 
 Return ONLY valid JSON. No markdown fences, no explanations, no preamble.
-OUTPUT FORMAT: {"clauses": [{"category": "<category_id>", "text": "<exact text>", "confidence": <0.0-1.0>, "gdpr_article": "<article>"}]}
+OUTPUT FORMAT: {"clauses": [{"category": "<category_id>", "text": "<exact text>", "confidence": <0.0-1.0>, "gdpr_article": "<article>", "plain_summary": "<Grade 6 rewrite>", "what_it_means": "This means...", "risk_level": "<low|medium|high|critical>", "risk_score": <0-100>, "red_flags": [], "positive_signals": []}]}
 If no relevant clauses are found, return: {"clauses": []}
 
 POLICY TEXT CHUNK:

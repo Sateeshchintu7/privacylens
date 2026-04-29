@@ -39,12 +39,19 @@ _FALLBACKS: dict[str, str] = {
         "third_party_sharing, user_rights, consent_mechanism,\n"
         "data_security, breach_notification, children_data,\n"
         "cross_border_transfer, cookies_tracking, contact_info.\n\n"
+        "For each clause also provide a short Grade 6 plain-English summary, a one-sentence 'This means...' explanation, a risk level, a risk score, red flags, and positive signals.\n\n"
         "Return ONLY valid JSON with no markdown:\n"
         '{"clauses": [{'
         '"category": "data_collection", '
         '"text": "exact quote from policy", '
         '"confidence": 0.85, '
-        '"gdpr_article": "Art. 13(1)(c)"'
+        '"gdpr_article": "Art. 13(1)(c)", '
+        '"plain_summary": "short rewrite", '
+        '"what_it_means": "This means...", '
+        '"risk_level": "medium", '
+        '"risk_score": 45, '
+        '"red_flags": [], '
+        '"positive_signals": []'
         "}]}"
     ),
     "risk_scoring": (

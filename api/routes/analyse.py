@@ -286,7 +286,7 @@ def _do_analysis(req: dict, progress_cb=None) -> dict:
         f_plain      = ex.submit(rewrite_policy, clauses, audience_level)
         f_readability = ex.submit(score_readability, policy_text)
         f_compliance = ex.submit(map_compliance, clauses, True, policy_text)
-        f_dark       = ex.submit(detect_dark_patterns, clauses)
+        f_dark       = ex.submit(detect_dark_patterns, clauses, policy_text)
         risk_report   = f_risk.result()
         _progress(65, "Rewriting in plain English...")
         plain_clauses = f_plain.result()

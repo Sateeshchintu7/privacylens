@@ -41,7 +41,7 @@ RISK SCORING GUIDE:
 76-100 (critical): Aggressive, harmful, or legally questionable. Example: "We sell personal data to brokers." -> 95
 
 OUTPUT FORMAT - return ONLY this JSON:
-{"clauses": [{"category": "<category_id>", "text": "<exact text from document>", "confidence": <0.0-1.0>, "gdpr_article": "<article>", "plain_summary": "<Grade 6 rewrite>", "what_it_means": "This means...", "risk_level": "<low|medium|high|critical>", "risk_score": <0-100>, "red_flags": ["<flag>"], "positive_signals": ["<signal>"]}]}
+{"clauses": [{"category": "<category_id>", "text": "<exact text from document>", "confidence": <0.0-1.0>, "gdpr_article": "<article>", "plain_summary": "<Grade 6 rewrite>", "what_it_means": "This means...", "risk_level": "<low|medium|high|critical>", "risk_score": <0-100>, "red_flags": [], "positive_signals": []}]}
 
 If no relevant clauses are found, return: {"clauses": []}
 

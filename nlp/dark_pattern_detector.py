@@ -142,9 +142,9 @@ class DarkPatternReport(BaseModel):
 # ── Public API ────────────────────────────────────────────────────────────────
 
 
-def detect_dark_patterns(clauses: list[ClauseResult]) -> DarkPatternReport:
+def detect_dark_patterns(clauses: list[ClauseResult], policy_text: str | None = None) -> DarkPatternReport:
     """
-    Scan policy clauses for manipulation tactics using the DarkBench taxonomy.
+    Scan a privacy policy for manipulation tactics using the DarkBench taxonomy.
 
     Academic ref:
         Kyi et al. "DarkBench: Benchmarking Dark Patterns in LLM Applications"
@@ -152,10 +152,11 @@ def detect_dark_patterns(clauses: list[ClauseResult]) -> DarkPatternReport:
 
     Args:
         clauses: extracted ClauseResult list from clause_extractor
+        policy_text: optional full cleaned policy text for broader detection
     Returns:
         DarkPatternReport with findings and plain-English summary
     """
-    full_text = " ".join(c.original_text for c in clauses)
+    full_text = policy_text.strip() if isinstance(policy_text, str) and policy_text.strip() else " ".join(c.original_text for c in clauses)
     full_lower = full_text.lower()
 
     found: list[DarkPattern] = []
@@ -170,7 +171,7 @@ def detect_dark_patterns(clauses: list[ClauseResult]) -> DarkPatternReport:
             if m:
                 start = max(0, m.start() - 25)
                 end   = min(len(full_lower), m.end() + 60)
-                snippet = full_lower[start:end].strip()
+                snippet = full_text[start:end].strip()
                 if snippet:
                     snippet = snippet[0].upper() + snippet[1:]
                 found.append(DarkPattern(
